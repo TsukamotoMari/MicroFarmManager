@@ -1,0 +1,29 @@
+# Godot ignore file
+# Add files/directories that should not be imported by Godot here
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build files
+builds/
+*.apk
+*.aab
+*.ipa
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Git
+.git/
+.gitignore

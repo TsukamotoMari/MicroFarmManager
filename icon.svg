@@ -1,0 +1,28 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" fill="#8B4513"/>
+  
+  <!-- Farm house -->
+  <rect x="20" y="60" width="40" height="40" fill="#DEB887"/>
+  <polygon points="20,60 40,30 60,60" fill="#8B0000"/>
+  
+  <!-- Door -->
+  <rect x="35" y="75" width="10" height="25" fill="#654321"/>
+  
+  <!-- Window -->
+  <rect x="25" y="65" width="8" height="8" fill="#87CEEB"/>
+  
+  <!-- Crops -->
+  <circle cx="80" cy="90" r="8" fill="#FFD700"/>
+  <circle cx="95" cy="85" r="6" fill="#FFA500"/>
+  <circle cx="85" cy="75" r="7" fill="#FF6347"/>
+  <circle cx="100" cy="95" r="5" fill="#32CD32"/>
+  
+  <!-- Robot -->
+  <rect x="70" y="45" width="15" height="20" fill="#C0C0C0" rx="2"/>
+  <circle cx="77" cy="52" r="3" fill="#00FF00"/>
+  <rect x="72" y="58" width="10" height="2" fill="#FF0000"/>
+  
+  <!-- Sun -->
+  <circle cx="110" cy="20" r="12" fill="#FFD700"/>
+</svg>
