@@ -33,17 +33,18 @@ jobs:
       - name: Install Godot and export templates
         run: |
           set -euo pipefail
-          VERSION="${GODOT_VERSION}.${GODOT_CHANNEL}"
-          BASE="Godot_v${VERSION}"
-          wget -q "https://github.com/godotengine/godot/releases/download/${VERSION}/${BASE}_linux.x86_64.zip"
-          wget -q "https://github.com/godotengine/godot/releases/download/${VERSION}/${BASE}_export_templates.tpz"
+          DOWNLOAD_TAG="${GODOT_VERSION}-${GODOT_CHANNEL}"
+          TEMPLATE_DIR="${GODOT_VERSION}.${GODOT_CHANNEL}"
+          BASE="Godot_v${DOWNLOAD_TAG}"
+          wget -q "https://github.com/godotengine/godot/releases/download/${DOWNLOAD_TAG}/${BASE}_linux.x86_64.zip"
+          wget -q "https://github.com/godotengine/godot/releases/download/${DOWNLOAD_TAG}/${BASE}_export_templates.tpz"
           unzip -q "${BASE}_linux.x86_64.zip"
           sudo mv "${BASE}_linux.x86_64" /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
-          mkdir -p "${HOME}/.local/share/godot/export_templates/${VERSION}"
+          mkdir -p "${HOME}/.local/share/godot/export_templates/${TEMPLATE_DIR}"
           cp "${BASE}_export_templates.tpz" /tmp/templates.zip
           unzip -q /tmp/templates.zip -d /tmp/godot-templates
-          mv /tmp/godot-templates/templates/* "${HOME}/.local/share/godot/export_templates/${VERSION}/"
+          mv /tmp/godot-templates/templates/* "${HOME}/.local/share/godot/export_templates/${TEMPLATE_DIR}/"
           godot --version
 
       - name: Apply release version metadata
