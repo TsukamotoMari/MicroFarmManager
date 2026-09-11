@@ -1,0 +1,84 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7.2"
+  GODOT_CHANNEL: "stable"
+  EXPORT_PRESET: "Android"
+  OUTPUT_APK: "builds/android/micro_farm_manager.apk"
+
+jobs:
+  export-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Godot and export templates
+        run: |
+          set -euo pipefail
+          VERSION="${GODOT_VERSION}.${GODOT_CHANNEL}"
+          BASE="Godot_v${VERSION}"
+          wget -q "https://github.com/godotengine/godot/releases/download/${VERSION}/${BASE}_linux.x86_64.zip"
+          wget -q "https://github.com/godotengine/godot/releases/download/${VERSION}/${BASE}_export_templates.tpz"
+          unzip -q "${BASE}_linux.x86_64.zip"
+          sudo mv "${BASE}_linux.x86_64" /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          mkdir -p "${HOME}/.local/share/godot/export_templates/${VERSION}"
+          cp "${BASE}_export_templates.tpz" /tmp/templates.zip
+          unzip -q /tmp/templates.zip -d /tmp/godot-templates
+          mv /tmp/godot-templates/templates/* "${HOME}/.local/share/godot/export_templates/${VERSION}/"
+          godot --version
+
+      - name: Apply release version metadata
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+          else
+            VERSION_NAME="ci-${GITHUB_RUN_NUMBER}"
+          fi
+          sed -i "s|^version/name=.*|version/name=\"${VERSION_NAME}\"|" export_presets.cfg
+          sed -i "s|^version/code=.*|version/code=${GITHUB_RUN_NUMBER}|" export_presets.cfg
+
+      - name: Export signed Android APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/android/keystore/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ github.workspace }}/android/keystore/debug.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: android
+        run: |
+          chmod +x build/ci/export-android.sh
+          build/ci/export-android.sh
+
+      - name: Upload release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.OUTPUT_APK }}
+          generate_release_notes: true
+
+      - name: Upload CI artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micro-farm-manager-android
+          path: ${{ env.OUTPUT_APK }}

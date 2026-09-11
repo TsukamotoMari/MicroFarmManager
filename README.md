@@ -67,10 +67,36 @@ A retro pixel art idle farming game built with Godot 4.2. Automate your farm wit
 3. Open the project
 4. Press F5 or click the Play button to run
 
-### Mobile Export
-The project includes export presets for Android and iOS:
-- Android: Uses the export preset to build an APK
-- iOS: Uses the export preset to build an IPA
+### Install on Android
+Download the latest **APK** from [GitHub Releases](https://github.com/TsukamotoMari/MicroFarmManager/releases):
+
+1. Open the release page on your phone (or download the APK to your computer and transfer it).
+2. Tap **micro_farm_manager.apk** to download.
+3. When prompted, allow installs from your browser or file manager (**Install unknown apps**).
+4. Open **Micro Farm Manager** from your app drawer.
+
+### Mobile Export (developers)
+Android builds use the pinned keystore at `android/keystore/debug.keystore` so sideload
+updates keep the same signature. See `android/keystore/README.md` for details.
+
+Local export:
+```bash
+godot --headless --export-release "Android" builds/android/micro_farm_manager.apk
+```
+
+CI export (Linux):
+```bash
+chmod +x build/ci/export-android.sh
+build/ci/export-android.sh
+```
+
+Tag a release to build and upload automatically:
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+iOS still requires a Mac and Apple Developer account.
 
 ## Project Structure
 ```
