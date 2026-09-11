@@ -30,7 +30,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build UpdateInstaller Android plugin
+      - name: Build Android plugins
         run: |
           chmod +x build/ci/build-update-plugin.sh
           build/ci/build-update-plugin.sh

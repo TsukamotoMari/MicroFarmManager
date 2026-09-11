@@ -15,5 +15,5 @@ if [[ ! -x "./gradlew" ]]; then
 fi
 
 chmod +x ./gradlew
-./gradlew :plugin:assembleRelease :plugin:assembleDebug
-echo "Built UpdateInstaller AARs in addons/UpdateInstaller/bin/"
+./gradlew :plugin:assembleRelease :plugin:assembleDebug :savevault:assembleRelease :savevault:assembleDebug
+echo "Built UpdateInstaller and SaveVault AARs in addons/"

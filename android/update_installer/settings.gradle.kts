@@ -14,5 +14,5 @@ dependencyResolutionManagement {
 	}
 }
 
-rootProject.name = "MicroFarmUpdateInstaller"
-include(":plugin")
+rootProject.name = "MicroFarmAndroidPlugins"
+include(":plugin", ":savevault")

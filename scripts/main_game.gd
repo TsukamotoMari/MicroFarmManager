@@ -39,8 +39,10 @@ extends Control
 @onready var version_request: HTTPRequest = %VersionRequest
 
 var app_update: AppUpdate
+var save_vault: SaveVault
 var plot_nodes = []
 var update_check_timer: float = 0.0
+var _loaded_save_time: int = 0
 var save_timer: float = 0.0
 var harvest_accumulator: float = 0.0
 var plant_accumulator: float = 0.0
@@ -141,6 +143,9 @@ func _ready():
 	_check_offline_progress()
 	if not coin_rush_button.pressed.is_connected(_on_coin_rush_tap):
 		coin_rush_button.pressed.connect(_on_coin_rush_tap)
+	save_vault = SaveVault.new()
+	if not save_vault.read_finished.is_connected(_on_cloud_save_read):
+		save_vault.read_finished.connect(_on_cloud_save_read)
 	app_update = AppUpdate.new()
 	app_update.connect_installer_signals()
 	app_update.update_available.connect(_on_update_available)
@@ -149,6 +154,7 @@ func _ready():
 		update_button.pressed.connect(_on_update_button_pressed)
 	_update_version_label()
 	get_tree().create_timer(UPDATE_CHECK_DELAY).timeout.connect(_check_for_app_update)
+	call_deferred("_restore_cloud_save")
 	set_process(true)
 
 func _configure_touch_scroll():
@@ -953,10 +959,17 @@ func _check_achievements():
 
 func _save_game():
 	game_data.last_save_time = Time.get_unix_time_from_system()
+	var save_data := _build_save_dict()
+	_write_local_save(save_data)
+	_loaded_save_time = int(save_data.get("last_save_time", 0))
+	if save_vault != null and save_vault.is_available():
+		save_vault.write_save(JSON.stringify(save_data))
+
+func _build_save_dict() -> Dictionary:
 	var achievements_save = {}
 	for achievement_id in achievements:
 		achievements_save[achievement_id] = {"unlocked": achievements[achievement_id].unlocked}
-	var save_data = {
+	return {
 		"gold": game_data.gold,
 		"farm_grid": game_data.farm_grid,
 		"crop_inventory": game_data.crop_inventory,
@@ -976,10 +989,94 @@ func _save_game():
 		"economy_version": 2,
 		"achievements": achievements_save
 	}
+
+func _write_local_save(save_data: Dictionary) -> void:
 	var file = FileAccess.open("user://save_data.json", FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(save_data))
 		file.close()
+
+func _read_local_save_dict() -> Dictionary:
+	var file = FileAccess.open("user://save_data.json", FileAccess.READ)
+	if not file:
+		return {}
+	var json_string = file.get_as_text()
+	file.close()
+	return _parse_save_dict(json_string)
+
+func _parse_save_dict(json_string: String) -> Dictionary:
+	if json_string.is_empty():
+		return {}
+	var json = JSON.new()
+	if json.parse(json_string) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
+	return json.data
+
+func _apply_save_dict(save_data: Dictionary) -> void:
+	game_data.gold = save_data.get("gold", 50.0)
+	var saved_grid = save_data.get("farm_grid", [])
+	if _is_valid_farm_grid(saved_grid):
+		game_data.farm_grid = saved_grid
+	game_data.crop_inventory = _merge_dictionary(game_data.crop_inventory, save_data.get("crop_inventory", {}))
+	game_data.product_inventory = _merge_dictionary(game_data.product_inventory, save_data.get("product_inventory", {}))
+	game_data.robots = _merge_dictionary(game_data.robots, save_data.get("robots", {}))
+	game_data.normalize_robots()
+	game_data.prestige_level = save_data.get("prestige_level", 0)
+	game_data.prestige_currency = save_data.get("prestige_currency", 0)
+	game_data.permanent_upgrades = _merge_dictionary(game_data.permanent_upgrades, save_data.get("permanent_upgrades", {}))
+	game_data.farm_upgrades = _merge_dictionary(game_data.farm_upgrades, save_data.get("farm_upgrades", {}))
+	game_data.unlocked_crops = save_data.get("unlocked_crops", ["wheat"])
+	game_data.crop_harvests = _merge_dictionary(game_data.crop_harvests, save_data.get("crop_harvests", {}))
+	game_data.selected_crop = save_data.get("selected_crop", "wheat")
+	game_data.total_harvested = save_data.get("total_harvested", 0)
+	game_data.total_gold_earned = save_data.get("total_gold_earned", 0.0)
+	game_data.play_time = save_data.get("play_time", 0.0)
+	game_data.last_save_time = save_data.get("last_save_time", 0)
+	if int(save_data.get("economy_version", 0)) < 1:
+		game_data.unlocked_crops = ["wheat"]
+		game_data.selected_crop = "wheat"
+	game_data.update_prestige_multipliers()
+	game_data.normalize_crops()
+	game_data.normalize_plots(int(save_data.get("economy_version", 0)) < 2)
+	var achievements_save = save_data.get("achievements", {})
+	for achievement_id in achievements_save:
+		if achievements.has(achievement_id):
+			achievements[achievement_id].unlocked = achievements_save[achievement_id].get("unlocked", false)
+	_loaded_save_time = int(save_data.get("last_save_time", 0))
+
+func _restore_cloud_save() -> void:
+	if OS.get_name() != "Android" or save_vault == null or not save_vault.is_available():
+		return
+	save_vault.prepare_restore()
+	save_vault.read_save()
+
+func _on_cloud_save_read(ok: bool, json_text: String, exists: bool) -> void:
+	if not ok:
+		if exists:
+			save_vault.prepare_restore()
+		return
+	var cloud_data := _parse_save_dict(json_text)
+	if cloud_data.is_empty():
+		return
+	var cloud_time := int(cloud_data.get("last_save_time", 0))
+	if cloud_time <= _loaded_save_time:
+		return
+	var had_local_save := _loaded_save_time > 0
+	_apply_save_dict(cloud_data)
+	_write_local_save(cloud_data)
+	_refresh_after_cloud_restore()
+	if not had_local_save:
+		_show_toast("Farm restored from cloud save")
+
+func _refresh_after_cloud_restore() -> void:
+	_refresh_farm_visuals()
+	_setup_crop_selector()
+	_setup_robot_panel()
+	_setup_upgrades_panel()
+	_refresh_inventory_panel()
+	_setup_prestige_panel()
+	_setup_achievements_panel()
+	_update_gold_display()
 
 func _merge_dictionary(base: Dictionary, incoming: Dictionary) -> Dictionary:
 	var merged = base.duplicate(true)
@@ -999,42 +1096,9 @@ func _is_valid_farm_grid(grid) -> bool:
 	return true
 
 func _load_game():
-	var file = FileAccess.open("user://save_data.json", FileAccess.READ)
-	if file:
-		var json_string = file.get_as_text()
-		file.close()
-		var json = JSON.new()
-		if json.parse(json_string) == OK:
-			var save_data = json.data
-			game_data.gold = save_data.get("gold", 50.0)
-			var saved_grid = save_data.get("farm_grid", [])
-			if _is_valid_farm_grid(saved_grid):
-				game_data.farm_grid = saved_grid
-			game_data.crop_inventory = _merge_dictionary(game_data.crop_inventory, save_data.get("crop_inventory", {}))
-			game_data.product_inventory = _merge_dictionary(game_data.product_inventory, save_data.get("product_inventory", {}))
-			game_data.robots = _merge_dictionary(game_data.robots, save_data.get("robots", {}))
-			game_data.normalize_robots()
-			game_data.prestige_level = save_data.get("prestige_level", 0)
-			game_data.prestige_currency = save_data.get("prestige_currency", 0)
-			game_data.permanent_upgrades = _merge_dictionary(game_data.permanent_upgrades, save_data.get("permanent_upgrades", {}))
-			game_data.farm_upgrades = _merge_dictionary(game_data.farm_upgrades, save_data.get("farm_upgrades", {}))
-			game_data.unlocked_crops = save_data.get("unlocked_crops", ["wheat"])
-			game_data.crop_harvests = _merge_dictionary(game_data.crop_harvests, save_data.get("crop_harvests", {}))
-			game_data.selected_crop = save_data.get("selected_crop", "wheat")
-			game_data.total_harvested = save_data.get("total_harvested", 0)
-			game_data.total_gold_earned = save_data.get("total_gold_earned", 0.0)
-			game_data.play_time = save_data.get("play_time", 0.0)
-			game_data.last_save_time = save_data.get("last_save_time", 0)
-			if int(save_data.get("economy_version", 0)) < 1:
-				game_data.unlocked_crops = ["wheat"]
-				game_data.selected_crop = "wheat"
-			game_data.update_prestige_multipliers()
-			game_data.normalize_crops()
-			game_data.normalize_plots(int(save_data.get("economy_version", 0)) < 2)
-			var achievements_save = save_data.get("achievements", {})
-			for achievement_id in achievements_save:
-				if achievements.has(achievement_id):
-					achievements[achievement_id].unlocked = achievements_save[achievement_id].get("unlocked", false)
+	var save_data := _read_local_save_dict()
+	if not save_data.is_empty():
+		_apply_save_dict(save_data)
 
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
