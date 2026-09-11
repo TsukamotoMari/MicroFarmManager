@@ -533,6 +533,27 @@ func cheapest_plant_cost() -> int:
 func can_afford_to_plant() -> bool:
 	return gold >= float(cheapest_plant_cost())
 
+func has_sellable_inventory() -> bool:
+	for crop_id in crop_inventory:
+		if int(crop_inventory[crop_id]) > 0:
+			return true
+	for product_id in product_inventory:
+		if int(product_inventory[product_id]) > 0:
+			return true
+	return false
+
+func has_ready_crops() -> bool:
+	for x in grid_size.x:
+		for y in grid_size.y:
+			if get_plot_data(Vector2i(x, y)).get("is_ready", false):
+				return true
+	return false
+
+func should_offer_coin_rush() -> bool:
+	return not can_afford_to_plant() \
+		and not has_sellable_inventory() \
+		and not has_ready_crops()
+
 # Inventory
 var crop_inventory: Dictionary = {}  # crop_type -> amount
 var product_inventory: Dictionary = {}  # product_type -> amount

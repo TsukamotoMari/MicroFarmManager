@@ -687,7 +687,7 @@ func _robot_ready(robot_id: String, delta: float) -> bool:
 	return false
 
 func _check_broke_state():
-	if game_data.can_afford_to_plant() or coin_rush_cooldown > 0.0 or broke_prompt_cooldown > 0.0:
+	if not game_data.should_offer_coin_rush() or coin_rush_cooldown > 0.0 or broke_prompt_cooldown > 0.0:
 		return
 	if coin_rush_popup.visible:
 		return
@@ -697,7 +697,7 @@ func _check_broke_state():
 func _offer_coin_rush():
 	coin_rush_taps = 0
 	coin_rush_button.text = "Tap!  0/" + str(COIN_RUSH_TAPS_NEEDED)
-	coin_rush_hint.text = "Out of planting money!\nTap the coin " + str(COIN_RUSH_TAPS_NEEDED) + " times to earn " + str(COIN_RUSH_REWARD) + " gold."
+	coin_rush_hint.text = "Out of gold and nothing left to sell!\nTap the coin " + str(COIN_RUSH_TAPS_NEEDED) + " times to earn " + str(COIN_RUSH_REWARD) + " gold."
 	coin_rush_popup.popup_centered()
 
 func _on_coin_rush_tap():
@@ -892,7 +892,7 @@ func _on_plot_pressed(grid_pos: Vector2i):
 		else:
 			var cost = game_data.crops[game_data.selected_crop].cost
 			_show_toast("Need " + _format_gold(cost) + " gold to plant")
-			if not game_data.can_afford_to_plant() and coin_rush_cooldown <= 0.0:
+			if game_data.should_offer_coin_rush() and coin_rush_cooldown <= 0.0:
 				_offer_coin_rush()
 	elif plot_data.get("is_ready", false):
 		if game_data.harvest_crop(grid_pos):

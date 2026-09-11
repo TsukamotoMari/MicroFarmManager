@@ -86,7 +86,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.52, 0.42, 0.32, 1)
 theme_override_font_sizes/font_size = 11
-text = "v1.0.3 · 4"
+text = "v1.0.5 · 6"
 
 [node name="SubtitleLabel" type="Label" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock"]
 unique_name_in_owner = true

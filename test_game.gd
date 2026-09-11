@@ -42,6 +42,21 @@ func _init():
 	
 	print("✓ Crop selling passed")
 	
+	game_data.gold = 3
+	assert(game_data.should_offer_coin_rush(), "Coin rush when broke with nothing to sell")
+	game_data.crop_inventory["wheat"] = 2
+	assert(not game_data.should_offer_coin_rush(), "No coin rush while crops can be sold")
+	game_data.crop_inventory["wheat"] = 0
+	game_data.gold = 100
+	assert(game_data.plant_crop(Vector2i(2, 0), "wheat"), "Plant wheat for ready-crop test")
+	var ready_plot = game_data.get_plot_data(Vector2i(2, 0))
+	ready_plot.is_ready = true
+	game_data.set_plot_data(Vector2i(2, 0), ready_plot)
+	game_data.gold = 3
+	assert(not game_data.should_offer_coin_rush(), "No coin rush while harvests are ready")
+	
+	print("✓ Coin rush gating passed")
+	
 	# Test product processing
 	game_data.crop_inventory["wheat"] = 2
 	assert(game_data.process_product("flour", 1), "Should be able to process flour")
