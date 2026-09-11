@@ -13,14 +13,21 @@ extends Control
 @onready var prestige_button: Button = %PrestigeButton
 @onready var achievement_label: Label = %AchievementLabel
 @onready var achievement_list: VBoxContainer = %AchievementList
+@onready var crop_scroll: ScrollContainer = %CropScroll
 @onready var market_scroll: ScrollContainer = %MarketScroll
 @onready var robot_scroll: ScrollContainer = %RobotScroll
+@onready var upgrade_scroll: ScrollContainer = %UpgradeScroll
+@onready var upgrade_list: VBoxContainer = %UpgradeList
 @onready var progress_scroll: ScrollContainer = %ProgressScroll
 @onready var market_tab: Button = %MarketTab
 @onready var bots_tab: Button = %BotsTab
+@onready var upgrades_tab: Button = %UpgradesTab
 @onready var progress_tab: Button = %ProgressTab
 @onready var toast: Label = %Toast
 @onready var offline_popup: AcceptDialog = %OfflinePopup
+@onready var coin_rush_popup: AcceptDialog = %CoinRushPopup
+@onready var coin_rush_hint: Label = %CoinRushHint
+@onready var coin_rush_button: Button = %CoinRushButton
 @onready var background: TextureRect = %Background
 @onready var top_bar: PanelContainer = %TopBar
 @onready var gold_chip: PanelContainer = %GoldChip
@@ -32,17 +39,26 @@ var harvest_accumulator: float = 0.0
 var plant_accumulator: float = 0.0
 var process_accumulator: float = 0.0
 var sell_accumulator: float = 0.0
+var robot_warmups: Dictionary = {}
 var last_inventory_signature: String = ""
 var last_plot_gold: int = -1
 var toast_timer: float = 0.0
 var current_tab: String = "market"
+var coin_rush_taps: int = 0
+var coin_rush_cooldown: float = 0.0
+var broke_prompt_cooldown: float = 0.0
 var art := PixelArtGenerator.new()
+
+const ROBOT_WARMUP_SECONDS := 6.0
+const COIN_RUSH_COOLDOWN := 90.0
+const COIN_RUSH_TAPS_NEEDED := 5
+const COIN_RUSH_REWARD := 5
 
 const ROBOT_HELP := {
 	"harvester": "Automatically harvests ready crops.",
 	"planter": "Plants your selected crop on empty soil.",
 	"processor": "Turns harvested crops into products.",
-	"seller": "Sells crops and products for gold."
+	"seller": "Sells crafted products only."
 }
 
 var achievements: Dictionary = {
@@ -108,12 +124,22 @@ func _ready():
 	theme = FarmTheme.create()
 	texture_filter = TEXTURE_FILTER_LINEAR
 	_apply_backdrop()
+	_configure_touch_scroll()
 	_load_game()
 	_setup_farm_grid()
 	_setup_ui()
 	_show_tab("market")
 	_check_offline_progress()
+	if not coin_rush_button.pressed.is_connected(_on_coin_rush_tap):
+		coin_rush_button.pressed.connect(_on_coin_rush_tap)
 	set_process(true)
+
+func _configure_touch_scroll():
+	for scroll in [crop_scroll, market_scroll, robot_scroll, upgrade_scroll, progress_scroll]:
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		if scroll != crop_scroll:
+			scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	crop_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 
 func _apply_backdrop():
 	background.texture = ImageTexture.create_from_image(art.create_background(160, 284))
@@ -125,10 +151,15 @@ func _apply_backdrop():
 
 func _process(delta):
 	game_data.play_time += delta
+	if coin_rush_cooldown > 0.0:
+		coin_rush_cooldown = maxf(0.0, coin_rush_cooldown - delta)
+	if broke_prompt_cooldown > 0.0:
+		broke_prompt_cooldown = maxf(0.0, broke_prompt_cooldown - delta)
 	_update_crop_growth(delta)
 	_update_ui()
 	_auto_robot_actions(delta)
 	_check_achievements()
+	_check_broke_state()
 	
 	save_timer += delta
 	if save_timer >= 30.0:
@@ -160,6 +191,7 @@ func _setup_ui():
 	_update_gold_display()
 	_setup_crop_selector()
 	_setup_robot_panel()
+	_setup_upgrades_panel()
 	_refresh_inventory_panel()
 	_setup_prestige_panel()
 	_setup_achievements_panel()
@@ -167,6 +199,7 @@ func _setup_ui():
 	if not market_tab.pressed.is_connected(_on_market_tab):
 		market_tab.pressed.connect(_on_market_tab)
 		bots_tab.pressed.connect(_on_bots_tab)
+		upgrades_tab.pressed.connect(_on_upgrades_tab)
 		progress_tab.pressed.connect(_on_progress_tab)
 		prestige_button.pressed.connect(_on_prestige_pressed)
 
@@ -176,6 +209,9 @@ func _on_market_tab():
 func _on_bots_tab():
 	_show_tab("bots")
 
+func _on_upgrades_tab():
+	_show_tab("upgrades")
+
 func _on_progress_tab():
 	_show_tab("progress")
 
@@ -183,9 +219,11 @@ func _show_tab(tab_name: String):
 	current_tab = tab_name
 	market_scroll.visible = tab_name == "market"
 	robot_scroll.visible = tab_name == "bots"
+	upgrade_scroll.visible = tab_name == "upgrades"
 	progress_scroll.visible = tab_name == "progress"
 	_style_tab(market_tab, tab_name == "market")
 	_style_tab(bots_tab, tab_name == "bots")
+	_style_tab(upgrades_tab, tab_name == "upgrades")
 	_style_tab(progress_tab, tab_name == "progress")
 
 func _style_tab(button: Button, active: bool):
@@ -268,10 +306,11 @@ func _setup_crop_selector():
 		var crop_data = game_data.crops[crop_id]
 		var chip := Button.new()
 		chip.set_meta("crop_id", crop_id)
-		chip.custom_minimum_size = Vector2(122, 64)
+		chip.custom_minimum_size = Vector2(132, 76)
 		chip.icon = ImageTexture.create_from_image(art.create_crop_sprite(crop_id, crop_data.color))
 		chip.expand_icon = true
-		chip.add_theme_constant_override("icon_max_width", 32)
+		chip.add_theme_constant_override("icon_max_width", 38)
+		chip.add_theme_font_size_override("font_size", 14)
 		chip.add_theme_color_override("font_color", FarmTheme.INK)
 		chip.add_theme_color_override("font_pressed_color", FarmTheme.INK)
 		chip.add_theme_color_override("font_hover_color", FarmTheme.INK)
@@ -355,16 +394,21 @@ func _setup_robot_panel():
 		card.add_child(row)
 		robot_list.add_child(card)
 
+func _robot_multiplier() -> float:
+	return game_data.get_total_robot_multiplier()
+
 func _robot_stat_line(robot_id: String) -> String:
-	return "%.1fx speed  ·  %d per action" % [game_data.robot_work_speed(robot_id), game_data.robot_batch_size(robot_id)]
+	var interval := game_data.robot_action_interval(robot_id, _robot_multiplier())
+	return "Every %.1fs  ·  %d per action" % [interval, game_data.robot_batch_size(robot_id)]
 
 func _robot_progress_text(robot_id: String) -> String:
 	var text := _robot_stat_line(robot_id)
 	if game_data.robot_is_maxed(robot_id):
 		return text + "\nFully upgraded"
 	var next_level := game_data.get_robot_level(game_data.robots[robot_id]) + 1
-	return text + "\nNext: %.1fx speed  ·  %d per action" % [
-		game_data.robot_work_speed_for_level(robot_id, next_level),
+	var next_interval := 1.0 / maxf(0.001, game_data.robot_work_speed_for_level(robot_id, next_level) * _robot_multiplier())
+	return text + "\nNext: every %.1fs  ·  %d per action" % [
+		next_interval,
 		game_data.robot_batch_size_for_level(next_level)
 	]
 
@@ -378,6 +422,7 @@ func _on_robot_upgrade(robot_id: String):
 		return
 	var was_new := game_data.get_robot_level(robot) <= 0
 	if game_data.upgrade_robot(robot_id):
+		_reset_robot_warmup(robot_id, ROBOT_WARMUP_SECONDS if was_new else 2.0)
 		call_deferred("_setup_robot_panel")
 		if was_new:
 			_show_toast(robot.name + " hired")
@@ -419,15 +464,59 @@ func _refresh_inventory_panel():
 		var inv_count := int(game_data.product_inventory.get(product_id, 0))
 		var have := int(game_data.crop_inventory.get(product.input_crop, 0))
 		var can_make := have >= int(product.input_amount)
-		_add_market_row(
+		_add_product_row(
 			art.create_product_sprite(product_id, product.color),
 			product.name,
 			"x" + str(inv_count) + "  ·  " + str(product.input_amount) + " " + game_data.crops[product.input_crop].name + " to make",
-			"Make" if can_make else "Sell",
-			can_make or inv_count > 0,
-			_on_product_action.bind(product_id)
+			can_make,
+			inv_count > 0,
+			product_id
 		)
 	last_inventory_signature = _inventory_signature()
+
+func _add_product_row(icon_image: Image, title_text: String, subtitle_text: String, can_make: bool, can_sell: bool, product_id: String):
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", FarmTheme.row_style())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var icon := TextureRect.new()
+	icon.texture_filter = TEXTURE_FILTER_NEAREST
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = ImageTexture.create_from_image(icon_image)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var title := Label.new()
+	title.text = title_text
+	title.add_theme_font_size_override("font_size", 15)
+	var subtitle := Label.new()
+	subtitle.text = subtitle_text
+	subtitle.add_theme_font_size_override("font_size", 12)
+	subtitle.add_theme_color_override("font_color", FarmTheme.MUTED)
+	info.add_child(title)
+	info.add_child(subtitle)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 6)
+	var make_btn := Button.new()
+	make_btn.custom_minimum_size = Vector2(64, 36)
+	make_btn.text = "Make"
+	make_btn.disabled = not can_make
+	if can_make:
+		make_btn.pressed.connect(_on_make_product.bind(product_id))
+	var sell_btn := Button.new()
+	sell_btn.custom_minimum_size = Vector2(64, 36)
+	sell_btn.text = "Sell"
+	sell_btn.disabled = not can_sell
+	if can_sell:
+		sell_btn.pressed.connect(_on_sell_product.bind(product_id))
+	actions.add_child(make_btn)
+	actions.add_child(sell_btn)
+	row.add_child(icon)
+	row.add_child(info)
+	row.add_child(actions)
+	card.add_child(row)
+	market_list.add_child(card)
 
 func _add_market_row(icon_image: Image, title_text: String, subtitle_text: String, action_text: String, enabled: bool, callback: Callable):
 	var card := PanelContainer.new()
@@ -469,14 +558,108 @@ func _on_sell_crop(crop_id: String):
 	else:
 		_show_toast("Nothing to sell")
 
-func _on_product_action(product_id: String):
+func _on_make_product(product_id: String):
 	if game_data.process_product(product_id, 1):
 		call_deferred("_refresh_inventory_panel")
 		_show_toast("Made " + game_data.products[product_id].name)
-	elif game_data.sell_product(product_id, 1):
-		call_deferred("_refresh_inventory_panel")
 	else:
 		_show_toast("Need more crops to craft")
+
+func _on_sell_product(product_id: String):
+	if game_data.sell_product(product_id, 1):
+		call_deferred("_refresh_inventory_panel")
+	else:
+		_show_toast("Nothing to sell")
+
+func _setup_upgrades_panel():
+	_clear_children(upgrade_list)
+	var header := Label.new()
+	header.text = "Spend gold to improve this run."
+	header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	header.add_theme_font_size_override("font_size", 13)
+	header.add_theme_color_override("font_color", FarmTheme.MUTED)
+	upgrade_list.add_child(header)
+	for upgrade_id in game_data.farm_upgrades:
+		var upgrade = game_data.farm_upgrades[upgrade_id]
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", FarmTheme.row_style())
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var title := Label.new()
+		title.text = upgrade.name + "  ·  Lv " + str(upgrade.current_level) + "/" + str(upgrade.max_level)
+		title.add_theme_font_size_override("font_size", 15)
+		var help := Label.new()
+		help.text = upgrade.description
+		help.add_theme_font_size_override("font_size", 12)
+		help.add_theme_color_override("font_color", FarmTheme.MUTED)
+		info.add_child(title)
+		info.add_child(help)
+		var action := Button.new()
+		action.custom_minimum_size = Vector2(92, 36)
+		if upgrade.current_level >= upgrade.max_level:
+			action.text = "Maxed"
+			action.disabled = true
+		else:
+			action.text = _format_gold(game_data.farm_upgrade_cost(upgrade_id)) + "g"
+			action.pressed.connect(_on_buy_farm_upgrade.bind(upgrade_id))
+		row.add_child(info)
+		row.add_child(action)
+		card.add_child(row)
+		upgrade_list.add_child(card)
+
+func _on_buy_farm_upgrade(upgrade_id: String):
+	if game_data.buy_farm_upgrade(upgrade_id):
+		call_deferred("_setup_upgrades_panel")
+		_show_toast(game_data.farm_upgrades[upgrade_id].name + " upgraded")
+	else:
+		_show_toast("Need more gold")
+
+func _reset_robot_warmup(robot_id: String, seconds: float):
+	robot_warmups[robot_id] = seconds
+	match robot_id:
+		"harvester":
+			harvest_accumulator = 0.0
+		"planter":
+			plant_accumulator = 0.0
+		"processor":
+			process_accumulator = 0.0
+		"seller":
+			sell_accumulator = 0.0
+
+func _robot_ready(robot_id: String, delta: float) -> bool:
+	var warmup := float(robot_warmups.get(robot_id, 0.0))
+	if warmup <= 0.0:
+		return true
+	robot_warmups[robot_id] = maxf(0.0, warmup - delta)
+	return false
+
+func _check_broke_state():
+	if game_data.can_afford_to_plant() or coin_rush_cooldown > 0.0 or broke_prompt_cooldown > 0.0:
+		return
+	if coin_rush_popup.visible:
+		return
+	broke_prompt_cooldown = 20.0
+	_offer_coin_rush()
+
+func _offer_coin_rush():
+	coin_rush_taps = 0
+	coin_rush_button.text = "Tap!  0/" + str(COIN_RUSH_TAPS_NEEDED)
+	coin_rush_hint.text = "Out of planting money!\nTap the coin " + str(COIN_RUSH_TAPS_NEEDED) + " times to earn " + str(COIN_RUSH_REWARD) + " gold."
+	coin_rush_popup.popup_centered()
+
+func _on_coin_rush_tap():
+	if coin_rush_taps >= COIN_RUSH_TAPS_NEEDED:
+		return
+	coin_rush_taps += 1
+	coin_rush_button.text = "Tap!  " + str(coin_rush_taps) + "/" + str(COIN_RUSH_TAPS_NEEDED)
+	if coin_rush_taps >= COIN_RUSH_TAPS_NEEDED:
+		game_data.gold += float(COIN_RUSH_REWARD)
+		coin_rush_cooldown = COIN_RUSH_COOLDOWN
+		_update_gold_display()
+		_show_toast("Earned " + str(COIN_RUSH_REWARD) + " gold from Coin Rush")
+		coin_rush_popup.hide()
 
 func _inventory_signature() -> String:
 	return str(game_data.crop_inventory) + str(game_data.product_inventory)
@@ -535,7 +718,7 @@ func _show_toast(message: String):
 
 func _update_crop_growth(_delta):
 	var current_time = Time.get_unix_time_from_system()
-	var growth_multiplier = game_data.prestige_multipliers.growth_speed * game_data.get_growth_boost_effect(game_data.permanent_upgrades.growth_boost.current_level)
+	var growth_multiplier = game_data.get_total_growth_multiplier()
 	
 	for x in game_data.grid_size.x:
 		for y in game_data.grid_size.y:
@@ -556,30 +739,30 @@ func _update_crop_growth(_delta):
 				plot_nodes[x][y].update_visual(plot_data)
 
 func _auto_robot_actions(delta):
-	var robot_multiplier = game_data.prestige_multipliers.robot_speed * game_data.get_robot_efficiency_effect(game_data.permanent_upgrades.robot_efficiency.current_level)
+	var robot_multiplier := _robot_multiplier()
 	var harvester = game_data.robots.get("harvester")
-	if harvester and harvester.owned:
+	if harvester and harvester.owned and _robot_ready("harvester", delta):
 		harvest_accumulator += delta * game_data.robot_work_speed("harvester") * robot_multiplier
 		if harvest_accumulator >= 1.0:
 			var ticks := int(floor(harvest_accumulator))
 			_auto_harvest(ticks * game_data.robot_batch_size("harvester"))
 			harvest_accumulator = fmod(harvest_accumulator, 1.0)
 	var planter = game_data.robots.get("planter")
-	if planter and planter.owned:
+	if planter and planter.owned and _robot_ready("planter", delta):
 		plant_accumulator += delta * game_data.robot_work_speed("planter") * robot_multiplier
 		if plant_accumulator >= 1.0:
 			var ticks := int(floor(plant_accumulator))
 			_auto_plant(ticks * game_data.robot_batch_size("planter"))
 			plant_accumulator = fmod(plant_accumulator, 1.0)
 	var processor = game_data.robots.get("processor")
-	if processor and processor.owned:
+	if processor and processor.owned and _robot_ready("processor", delta):
 		process_accumulator += delta * game_data.robot_work_speed("processor") * robot_multiplier
 		if process_accumulator >= 1.0:
 			var ticks := int(floor(process_accumulator))
 			_auto_process(ticks * game_data.robot_batch_size("processor"))
 			process_accumulator = fmod(process_accumulator, 1.0)
 	var seller = game_data.robots.get("seller")
-	if seller and seller.owned:
+	if seller and seller.owned and _robot_ready("seller", delta):
 		sell_accumulator += delta * game_data.robot_work_speed("seller") * robot_multiplier
 		if sell_accumulator >= 1.0:
 			var ticks := int(floor(sell_accumulator))
@@ -617,11 +800,6 @@ func _auto_process(process_count):
 			process_count -= 1
 
 func _auto_sell(sell_count):
-	for crop_id in game_data.crop_inventory.keys():
-		if sell_count <= 0:
-			break
-		if game_data.crop_inventory[crop_id] > 0 and game_data.sell_crop(crop_id, 1):
-			sell_count -= 1
 	for product_id in game_data.product_inventory.keys():
 		if sell_count <= 0:
 			break
@@ -663,6 +841,8 @@ func _on_plot_pressed(grid_pos: Vector2i):
 		else:
 			var cost = game_data.crops[game_data.selected_crop].cost
 			_show_toast("Need " + _format_gold(cost) + " gold to plant")
+			if not game_data.can_afford_to_plant() and coin_rush_cooldown <= 0.0:
+				_offer_coin_rush()
 	elif plot_data.get("is_ready", false):
 		if game_data.harvest_crop(grid_pos):
 			plot_nodes[grid_pos.x][grid_pos.y].update_visual(game_data.get_plot_data(grid_pos))
@@ -673,6 +853,11 @@ func _on_plot_pressed(grid_pos: Vector2i):
 func _on_prestige_pressed():
 	if game_data.can_prestige():
 		var result = game_data.do_prestige()
+		robot_warmups.clear()
+		harvest_accumulator = 0.0
+		plant_accumulator = 0.0
+		process_accumulator = 0.0
+		sell_accumulator = 0.0
 		_setup_ui()
 		_refresh_farm_visuals()
 		_show_toast("Prestige level " + str(result.prestige_level))
@@ -720,6 +905,7 @@ func _save_game():
 		"prestige_level": game_data.prestige_level,
 		"prestige_currency": game_data.prestige_currency,
 		"permanent_upgrades": game_data.permanent_upgrades,
+		"farm_upgrades": game_data.farm_upgrades,
 		"unlocked_crops": game_data.unlocked_crops,
 		"crop_harvests": game_data.crop_harvests,
 		"selected_crop": game_data.selected_crop,
@@ -771,6 +957,7 @@ func _load_game():
 			game_data.prestige_level = save_data.get("prestige_level", 0)
 			game_data.prestige_currency = save_data.get("prestige_currency", 0)
 			game_data.permanent_upgrades = _merge_dictionary(game_data.permanent_upgrades, save_data.get("permanent_upgrades", {}))
+			game_data.farm_upgrades = _merge_dictionary(game_data.farm_upgrades, save_data.get("farm_upgrades", {}))
 			game_data.unlocked_crops = save_data.get("unlocked_crops", ["wheat"])
 			game_data.crop_harvests = _merge_dictionary(game_data.crop_harvests, save_data.get("crop_harvests", {}))
 			game_data.selected_crop = save_data.get("selected_crop", "wheat")

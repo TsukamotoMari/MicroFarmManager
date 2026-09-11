@@ -316,7 +316,7 @@ var robots: Dictionary = {
 	"harvester": {
 		"name": "Harvester Bot",
 		"cost": 500,
-		"speed_multiplier": 2.0,
+		"speed_multiplier": 0.18,
 		"auto_harvest": true,
 		"owned": false,
 		"level": 0
@@ -324,7 +324,7 @@ var robots: Dictionary = {
 	"planter": {
 		"name": "Planter Bot",
 		"cost": 750,
-		"speed_multiplier": 1.5,
+		"speed_multiplier": 0.14,
 		"auto_plant": true,
 		"owned": false,
 		"level": 0
@@ -332,7 +332,7 @@ var robots: Dictionary = {
 	"processor": {
 		"name": "Processor Bot",
 		"cost": 1000,
-		"speed_multiplier": 2.0,
+		"speed_multiplier": 0.12,
 		"auto_process": true,
 		"owned": false,
 		"level": 0
@@ -340,7 +340,7 @@ var robots: Dictionary = {
 	"seller": {
 		"name": "Seller Bot",
 		"cost": 1500,
-		"speed_multiplier": 1.5,
+		"speed_multiplier": 0.10,
 		"auto_sell": true,
 		"owned": false,
 		"level": 0
@@ -370,10 +370,16 @@ func robot_is_maxed(robot_id: String) -> bool:
 func robot_work_speed_for_level(robot_id: String, level: int) -> float:
 	var robot = robots[robot_id]
 	var safe_level := maxi(1, level)
-	return float(robot.speed_multiplier) * (1.0 + float(safe_level - 1) * 0.25)
+	return float(robot.speed_multiplier) * (1.0 + float(safe_level - 1) * 0.35)
 
 func robot_batch_size_for_level(level: int) -> int:
-	return 1 + int((maxi(1, level) - 1) / 5)
+	return 1 + int((maxi(1, level) - 1) / 4)
+
+func robot_action_interval(robot_id: String, robot_multiplier: float = 1.0) -> float:
+	var speed := robot_work_speed(robot_id) * robot_multiplier
+	if speed <= 0.0:
+		return 999.0
+	return 1.0 / speed
 
 func robot_work_speed(robot_id: String) -> float:
 	return robot_work_speed_for_level(robot_id, get_robot_level(robots[robot_id]))
@@ -445,6 +451,87 @@ func get_growth_boost_effect(level: int) -> float:
 
 func get_robot_efficiency_effect(level: int) -> float:
 	return 1.0 + (level * 0.1)
+
+# Farm upgrades bought with gold during a run
+var farm_upgrades: Dictionary = {
+	"growth_speed": {
+		"name": "Fast Growth",
+		"description": "+8% crop growth speed",
+		"cost": 25,
+		"cost_scale": 1.45,
+		"max_level": 15,
+		"current_level": 0
+	},
+	"harvest_bonus": {
+		"name": "Rich Soil",
+		"description": "+5% crop sell value",
+		"cost": 40,
+		"cost_scale": 1.5,
+		"max_level": 12,
+		"current_level": 0
+	},
+	"bot_tune": {
+		"name": "Bot Tune-up",
+		"description": "+6% bot speed",
+		"cost": 60,
+		"cost_scale": 1.55,
+		"max_level": 12,
+		"current_level": 0
+	}
+}
+
+func get_farm_growth_effect(level: int) -> float:
+	return 1.0 + (level * 0.08)
+
+func get_farm_harvest_effect(level: int) -> float:
+	return 1.0 + (level * 0.05)
+
+func get_farm_bot_effect(level: int) -> float:
+	return 1.0 + (level * 0.06)
+
+func farm_upgrade_cost(upgrade_id: String) -> int:
+	var upgrade = farm_upgrades.get(upgrade_id)
+	if upgrade == null:
+		return 0
+	return int(round(float(upgrade.cost) * pow(float(upgrade.cost_scale), float(upgrade.current_level))))
+
+func can_buy_farm_upgrade(upgrade_id: String) -> bool:
+	var upgrade = farm_upgrades.get(upgrade_id)
+	if upgrade == null:
+		return false
+	return upgrade.current_level < upgrade.max_level and gold >= farm_upgrade_cost(upgrade_id)
+
+func buy_farm_upgrade(upgrade_id: String) -> bool:
+	if not can_buy_farm_upgrade(upgrade_id):
+		return false
+	var upgrade = farm_upgrades[upgrade_id]
+	gold -= farm_upgrade_cost(upgrade_id)
+	upgrade.current_level += 1
+	return true
+
+func get_total_growth_multiplier() -> float:
+	return prestige_multipliers.growth_speed \
+		* get_growth_boost_effect(permanent_upgrades.growth_boost.current_level) \
+		* get_farm_growth_effect(farm_upgrades.growth_speed.current_level)
+
+func get_total_harvest_multiplier() -> float:
+	return prestige_multipliers.gold_multiplier \
+		* get_gold_boost_effect(permanent_upgrades.gold_boost.current_level) \
+		* get_farm_harvest_effect(farm_upgrades.harvest_bonus.current_level)
+
+func get_total_robot_multiplier() -> float:
+	return prestige_multipliers.robot_speed \
+		* get_robot_efficiency_effect(permanent_upgrades.robot_efficiency.current_level) \
+		* get_farm_bot_effect(farm_upgrades.bot_tune.current_level)
+
+func cheapest_plant_cost() -> int:
+	var cheapest := 999999
+	for crop_id in unlocked_crops:
+		cheapest = mini(cheapest, int(crops[crop_id].cost))
+	return cheapest if cheapest < 999999 else 0
+
+func can_afford_to_plant() -> bool:
+	return gold >= float(cheapest_plant_cost())
 
 # Inventory
 var crop_inventory: Dictionary = {}  # crop_type -> amount
@@ -635,8 +722,7 @@ func sell_crop(crop_type: String, amount: int = 1) -> bool:
 		return false
 	
 	var crop_data = crops[crop_type]
-	var multiplier = prestige_multipliers.gold_multiplier * get_gold_boost_effect(permanent_upgrades.gold_boost.current_level)
-	var earnings = crop_data.sell_price * amount * multiplier
+	var earnings = crop_data.sell_price * amount * get_total_harvest_multiplier()
 	
 	crop_inventory[crop_type] -= amount
 	gold += earnings
@@ -648,8 +734,7 @@ func sell_product(product_type: String, amount: int = 1) -> bool:
 		return false
 	
 	var product_data = products[product_type]
-	var multiplier = prestige_multipliers.gold_multiplier * get_gold_boost_effect(permanent_upgrades.gold_boost.current_level)
-	var earnings = product_data.sell_price * amount * multiplier
+	var earnings = product_data.sell_price * amount * get_total_harvest_multiplier()
 	
 	product_inventory[product_type] -= amount
 	gold += earnings
@@ -769,6 +854,8 @@ func do_prestige() -> Dictionary:
 	
 	# Reset selected crop
 	selected_crop = "wheat"
+	for upgrade_id in farm_upgrades:
+		farm_upgrades[upgrade_id].current_level = 0
 	
 	return {
 		"prestige_level": prestige_level,

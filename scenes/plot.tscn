@@ -3,9 +3,9 @@
 [ext_resource type="Script" path="res://scripts/plot.gd" id="1_5k2j3"]
 
 [node name="Plot" type="Button"]
-custom_minimum_size = Vector2(44, 44)
-offset_right = 44.0
-offset_bottom = 44.0
+custom_minimum_size = Vector2(54, 54)
+offset_right = 54.0
+offset_bottom = 54.0
 flat = true
 script = ExtResource("1_5k2j3")
 

@@ -112,13 +112,15 @@ layout_mode = 2
 [node name="FarmGrid" type="GridContainer" parent="SafeArea/Layout/FarmPanel/FarmBox/FarmCenter"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/h_separation = 3
-theme_override_constants/v_separation = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
 columns = 6
 
 [node name="CropScroll" type="ScrollContainer" parent="SafeArea/Layout"]
-custom_minimum_size = Vector2(0, 78)
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 88)
 layout_mode = 2
+horizontal_scroll_mode = 3
 vertical_scroll_mode = 0
 
 [node name="CropBar" type="HBoxContainer" parent="SafeArea/Layout/CropScroll"]
@@ -143,6 +145,12 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "Bots"
 
+[node name="UpgradesTab" type="Button" parent="SafeArea/Layout/TabBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Upgrades"
+
 [node name="ProgressTab" type="Button" parent="SafeArea/Layout/TabBar"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -157,6 +165,7 @@ size_flags_vertical = 3
 unique_name_in_owner = true
 layout_mode = 2
 horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
 
 [node name="MarketList" type="VBoxContainer" parent="SafeArea/Layout/ContentPanel/MarketScroll"]
 unique_name_in_owner = true
@@ -169,8 +178,22 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
 
 [node name="RobotList" type="VBoxContainer" parent="SafeArea/Layout/ContentPanel/RobotScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="UpgradeScroll" type="ScrollContainer" parent="SafeArea/Layout/ContentPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
+
+[node name="UpgradeList" type="VBoxContainer" parent="SafeArea/Layout/ContentPanel/UpgradeScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -181,6 +204,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
 
 [node name="ProgressBox" type="VBoxContainer" parent="SafeArea/Layout/ContentPanel/ProgressScroll"]
 unique_name_in_owner = true
@@ -238,3 +262,27 @@ title = "Welcome Back"
 initial_position = 2
 size = Vector2i(360, 220)
 ok_button_text = "Collect"
+
+[node name="CoinRushPopup" type="AcceptDialog" parent="."]
+unique_name_in_owner = true
+title = "Coin Rush"
+initial_position = 2
+size = Vector2i(340, 260)
+ok_button_text = "Close"
+dialog_hide_on_ok = true
+
+[node name="CoinRushBox" type="VBoxContainer" parent="CoinRushPopup"]
+theme_override_constants/separation = 10
+
+[node name="CoinRushHint" type="Label" parent="CoinRushPopup/CoinRushBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+horizontal_alignment = 1
+text = "Tap the coin 5 times to earn 5 gold."
+
+[node name="CoinRushButton" type="Button" parent="CoinRushPopup/CoinRushBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "Tap!  0/5"
