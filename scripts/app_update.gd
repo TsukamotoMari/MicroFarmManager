@@ -5,7 +5,10 @@ signal update_available(info: Dictionary)
 signal status_changed(message: String)
 
 const GITHUB_REPO := "TsukamotoMari/MicroFarmManager"
-const VERSION_URL := "https://TsukamotoMari.github.io/MicroFarmManager/version.json"
+const VERSION_URLS := [
+	"https://TsukamotoMari.github.io/MicroFarmManager/version.json",
+	"https://raw.githubusercontent.com/TsukamotoMari/MicroFarmManager/gh-pages/version.json"
+]
 
 var installer := UpdateInstaller.new()
 var remote: Dictionary = {}
@@ -27,8 +30,22 @@ func check_for_update(http: HTTPRequest) -> void:
 		return
 	if not http.request_completed.is_connected(_on_version_response):
 		http.request_completed.connect(_on_version_response)
+	_version_check_index = 0
+	_version_check_http = http
+	_request_next_version_url()
+
+var _version_check_index := 0
+var _version_check_http: HTTPRequest
+
+func _request_next_version_url() -> void:
+	if _version_check_http == null or _version_check_index >= VERSION_URLS.size():
+		return
 	var cache_bust := "?t=%d" % Time.get_unix_time_from_system()
-	http.request(VERSION_URL + cache_bust)
+	_version_check_http.request(VERSION_URLS[_version_check_index] + cache_bust)
+
+func _try_next_version_url() -> void:
+	_version_check_index += 1
+	_request_next_version_url()
 
 func install_update() -> void:
 	if remote.is_empty() or busy:
@@ -47,9 +64,11 @@ func install_update() -> void:
 
 func _on_version_response(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if response_code < 200 or response_code >= 300:
+		_try_next_version_url()
 		return
 	var parsed = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(parsed) != TYPE_DICTIONARY:
+		_try_next_version_url()
 		return
 	var data: Dictionary = parsed
 	var remote_code := int(data.get("versionCode", 0))
