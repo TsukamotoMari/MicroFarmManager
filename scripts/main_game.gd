@@ -38,8 +38,9 @@ extends Control
 @onready var version_label: Label = %VersionLabel
 @onready var version_request: HTTPRequest = %VersionRequest
 
-var app_update := AppUpdate.new()
+var app_update: AppUpdate
 var plot_nodes = []
+var update_check_timer: float = 0.0
 var save_timer: float = 0.0
 var harvest_accumulator: float = 0.0
 var plant_accumulator: float = 0.0
@@ -59,6 +60,8 @@ const ROBOT_WARMUP_SECONDS := 6.0
 const COIN_RUSH_COOLDOWN := 90.0
 const COIN_RUSH_TAPS_NEEDED := 5
 const COIN_RUSH_REWARD := 5
+const UPDATE_CHECK_DELAY := 0.75
+const UPDATE_CHECK_INTERVAL := 45.0
 
 const ROBOT_HELP := {
 	"harvester": "Automatically harvests ready crops.",
@@ -138,13 +141,14 @@ func _ready():
 	_check_offline_progress()
 	if not coin_rush_button.pressed.is_connected(_on_coin_rush_tap):
 		coin_rush_button.pressed.connect(_on_coin_rush_tap)
+	app_update = AppUpdate.new()
 	app_update.connect_installer_signals()
 	app_update.update_available.connect(_on_update_available)
 	app_update.status_changed.connect(_on_update_status_changed)
 	if not update_button.pressed.is_connected(_on_update_button_pressed):
 		update_button.pressed.connect(_on_update_button_pressed)
 	_update_version_label()
-	call_deferred("_check_for_app_update")
+	get_tree().create_timer(UPDATE_CHECK_DELAY).timeout.connect(_check_for_app_update)
 	set_process(true)
 
 func _configure_touch_scroll():
@@ -202,6 +206,11 @@ func _refresh_update_banner():
 
 func _process(delta):
 	game_data.play_time += delta
+	update_check_timer += delta
+	if update_check_timer >= UPDATE_CHECK_INTERVAL:
+		update_check_timer = 0.0
+		if app_update != null and not app_update.has_update():
+			_check_for_app_update()
 	if coin_rush_cooldown > 0.0:
 		coin_rush_cooldown = maxf(0.0, coin_rush_cooldown - delta)
 	if broke_prompt_cooldown > 0.0:
