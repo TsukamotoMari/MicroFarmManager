@@ -24,6 +24,8 @@ android {
 
 dependencies {
 	implementation("org.godotengine:godot:4.7.2.stable")
+	implementation("androidx.annotation:annotation:1.9.1")
+	implementation("androidx.collection:collection:1.4.5")
 }
 
 val copyReleaseAar by tasks.registering(Copy::class) {
