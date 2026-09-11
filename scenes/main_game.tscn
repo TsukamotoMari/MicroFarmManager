@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://a1b2c3d4e5f6g"]
+[gd_scene load_steps=3 format=3 uid="uid://a1b2c3d4e5f6g"]
 
 [ext_resource type="Script" path="res://scripts/main_game.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/finger_scroll.gd" id="2_finger"]
 
 [node name="MainGame" type="Control"]
 layout_mode = 3
@@ -32,10 +33,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
 [node name="Layout" type="VBoxContainer" parent="SafeArea"]
 layout_mode = 2
@@ -95,6 +96,24 @@ theme_override_colors/font_color = Color(0.42, 0.32, 0.22, 1)
 theme_override_font_sizes/font_size = 13
 text = "Tap empty soil to plant"
 
+[node name="LevelBlock" type="VBoxContainer" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="LevelLabel" type="Label" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock/LevelBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.42, 0.32, 1)
+theme_override_font_sizes/font_size = 11
+text = "Next Level 0 / 25"
+
+[node name="LevelBar" type="ProgressBar" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock/LevelBlock"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+max_value = 25.0
+show_percentage = false
+
 [node name="GoldChip" type="PanelContainer" parent="SafeArea/Layout/TopBar/TopRow"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -136,6 +155,7 @@ theme_override_font_sizes/font_size = 13
 text = "Crops glow gold when they are ready to harvest"
 
 [node name="FarmCenter" type="CenterContainer" parent="SafeArea/Layout/FarmPanel/FarmBox"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="FarmGrid" type="GridContainer" parent="SafeArea/Layout/FarmPanel/FarmBox/FarmCenter"]
@@ -149,13 +169,80 @@ columns = 6
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 88)
 layout_mode = 2
+script = ExtResource("2_finger")
+scroll_vertical_enabled = false
+scroll_horizontal_enabled = true
 horizontal_scroll_mode = 3
 vertical_scroll_mode = 0
 
 [node name="CropBar" type="HBoxContainer" parent="SafeArea/Layout/CropScroll"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
 theme_override_constants/separation = 8
+
+[node name="ResourceBars" type="PanelContainer" parent="SafeArea/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ResourceBox" type="VBoxContainer" parent="SafeArea/Layout/ResourceBars"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="WaterRow" type="HBoxContainer" parent="SafeArea/Layout/ResourceBars/ResourceBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WaterIcon" type="TextureRect" parent="SafeArea/Layout/ResourceBars/ResourceBox/WaterRow"]
+unique_name_in_owner = true
+texture_filter = 0
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="WaterBar" type="ProgressBar" parent="SafeArea/Layout/ResourceBars/ResourceBox/WaterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 30.0
+show_percentage = false
+
+[node name="WaterLabel" type="Label" parent="SafeArea/Layout/ResourceBars/ResourceBox/WaterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "30 / 30"
+
+[node name="EnergyRow" type="HBoxContainer" parent="SafeArea/Layout/ResourceBars/ResourceBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EnergyIcon" type="TextureRect" parent="SafeArea/Layout/ResourceBars/ResourceBox/EnergyRow"]
+unique_name_in_owner = true
+texture_filter = 0
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="EnergyBar" type="ProgressBar" parent="SafeArea/Layout/ResourceBars/ResourceBox/EnergyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 25.0
+show_percentage = false
+
+[node name="EnergyLabel" type="Label" parent="SafeArea/Layout/ResourceBars/ResourceBox/EnergyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "25 / 25"
 
 [node name="TabBar" type="HBoxContainer" parent="SafeArea/Layout"]
 unique_name_in_owner = true
@@ -187,12 +274,19 @@ size_flags_horizontal = 3
 text = "Progress"
 
 [node name="ContentPanel" type="PanelContainer" parent="SafeArea/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 108)
 layout_mode = 2
 size_flags_vertical = 3
 
 [node name="MarketScroll" type="ScrollContainer" parent="SafeArea/Layout/ContentPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_finger")
+scroll_vertical_enabled = true
+scroll_horizontal_enabled = false
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 3
 
@@ -206,6 +300,11 @@ theme_override_constants/separation = 6
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_finger")
+scroll_vertical_enabled = true
+scroll_horizontal_enabled = false
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 3
 
@@ -219,6 +318,11 @@ theme_override_constants/separation = 6
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_finger")
+scroll_vertical_enabled = true
+scroll_horizontal_enabled = false
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 3
 
@@ -232,6 +336,11 @@ theme_override_constants/separation = 6
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_finger")
+scroll_vertical_enabled = true
+scroll_horizontal_enabled = false
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 3
 

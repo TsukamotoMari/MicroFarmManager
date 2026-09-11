@@ -22,6 +22,13 @@ func _init():
 	game_data.gold = 100  # Give some gold
 	assert(game_data.plant_crop(test_pos, "wheat"), "Should be able to plant wheat")
 	assert(game_data.gold == 95, "Gold should be reduced by crop cost")
+	assert(game_data.water == GameData.WATER_MAX - GameData.WATER_PLANT_COST, "Planting should spend water")
+	var planted_plot = game_data.get_plot_data(test_pos)
+	assert(planted_plot.get("watered", false), "Planted plot should be watered")
+	
+	game_data.water = 0
+	assert(not game_data.plant_crop(Vector2i(1, 0), "wheat"), "Should not plant without water")
+	game_data.water = GameData.WATER_MAX
 	
 	print("✓ Crop planting passed")
 	
@@ -32,8 +39,18 @@ func _init():
 	
 	assert(game_data.harvest_crop(test_pos), "Should be able to harvest ready crop")
 	assert(game_data.crop_inventory["wheat"] == 1, "Should have 1 wheat in inventory")
+	assert(game_data.farmer_xp == 1, "Harvest should grant farmer XP")
 	
 	print("✓ Crop harvesting passed")
+	
+	game_data.robot_energy = 0
+	assert(not game_data.spend_robot_energy(), "Robot energy should block at zero")
+	game_data.robot_energy = GameData.ROBOT_ENERGY_MAX
+	assert(game_data.spend_robot_energy(), "Robot energy should spend when available")
+	game_data.regen_resources(1.0)
+	assert(game_data.water > 0, "Water should regenerate over time")
+	
+	print("✓ Water and robot energy passed")
 	
 	# Test selling
 	assert(game_data.sell_crop("wheat", 1), "Should be able to sell wheat")

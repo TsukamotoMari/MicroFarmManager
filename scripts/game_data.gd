@@ -6,6 +6,17 @@ class_name GameData
 # Player resources
 var gold: float = 50.0
 var gems: int = 0
+var water: float = 30.0
+var robot_energy: float = 25.0
+var farmer_xp: int = 0
+
+const WATER_MAX := 30.0
+const ROBOT_ENERGY_MAX := 25.0
+const WATER_PLANT_COST := 1.0
+const ROBOT_ACTION_ENERGY := 1.0
+const FARMER_XP_PER_LEVEL := 25
+const WATER_REGEN_PER_SEC := 4.0
+const ROBOT_ENERGY_REGEN_PER_SEC := 3.5
 
 # Farm grid data
 var farm_grid: Array = []  # 2D array of plot data
@@ -531,7 +542,7 @@ func cheapest_plant_cost() -> int:
 	return cheapest if cheapest < 999999 else 0
 
 func can_afford_to_plant() -> bool:
-	return gold >= float(cheapest_plant_cost())
+	return gold >= float(cheapest_plant_cost()) and can_spend_water()
 
 func has_sellable_inventory() -> bool:
 	for crop_id in crop_inventory:
@@ -591,8 +602,44 @@ func _blank_plot(unlocked: bool) -> Dictionary:
 		"planted_time": 0.0,
 		"growth_stage": 0,
 		"is_ready": false,
-		"unlocked": unlocked
+		"unlocked": unlocked,
+		"watered": false
 	}
+
+func farmer_level() -> int:
+	return int(farmer_xp / FARMER_XP_PER_LEVEL)
+
+func farmer_xp_into_level() -> int:
+	return farmer_xp % FARMER_XP_PER_LEVEL
+
+func has_active_robots() -> bool:
+	for robot in robots.values():
+		if robot.get("owned", false):
+			return true
+	return false
+
+func regen_resources(delta: float) -> void:
+	water = minf(WATER_MAX, water + WATER_REGEN_PER_SEC * delta)
+	if has_active_robots():
+		robot_energy = minf(ROBOT_ENERGY_MAX, robot_energy + ROBOT_ENERGY_REGEN_PER_SEC * delta)
+
+func can_spend_water(amount: float = WATER_PLANT_COST) -> bool:
+	return water >= amount
+
+func spend_water(amount: float = WATER_PLANT_COST) -> bool:
+	if water < amount:
+		return false
+	water -= amount
+	return true
+
+func can_spend_robot_energy(amount: float = ROBOT_ACTION_ENERGY) -> bool:
+	return robot_energy >= amount
+
+func spend_robot_energy(amount: float = ROBOT_ACTION_ENERGY) -> bool:
+	if robot_energy < amount:
+		return false
+	robot_energy -= amount
+	return true
 
 func _initialize_farm_grid():
 	farm_grid.clear()
@@ -677,11 +724,14 @@ func normalize_plots(force_starter_layout: bool = false):
 				continue
 			if force_starter_layout or not plot.has("unlocked"):
 				plot.unlocked = is_starting_plot(pos) or plot.get("crop_type", null) != null
+			if not plot.has("watered"):
+				plot.watered = plot.get("crop_type", null) != null
 			if not plot.get("unlocked", false):
 				plot.crop_type = null
 				plot.planted_time = 0.0
 				plot.growth_stage = 0
 				plot.is_ready = false
+				plot.watered = false
 
 func plant_crop(grid_pos: Vector2i, crop_type: String) -> bool:
 	var crop_data = crops.get(crop_type)
@@ -694,16 +744,22 @@ func plant_crop(grid_pos: Vector2i, crop_type: String) -> bool:
 	
 	if gold < crop_data.cost:
 		return false
+	if not can_spend_water():
+		return false
 	
 	var plot = get_plot_data(grid_pos)
 	if plot.is_empty() or plot.get("crop_type", null) != null:
 		return false
 	
 	gold -= crop_data.cost
+	if not spend_water():
+		gold += crop_data.cost
+		return false
 	plot.crop_type = crop_type
 	plot.planted_time = Time.get_unix_time_from_system()
 	plot.growth_stage = 0
 	plot.is_ready = false
+	plot.watered = true
 	plot.unlocked = true
 	return true
 
@@ -714,16 +770,25 @@ func harvest_crop(grid_pos: Vector2i) -> bool:
 	if plot.get("crop_type", null) == null or not plot.get("is_ready", false):
 		return false
 	
-	crop_inventory[plot.crop_type] += 1
-	crop_harvests[plot.crop_type] = int(crop_harvests.get(plot.crop_type, 0)) + 1
+	var crop_type: String = plot.crop_type
+	crop_inventory[crop_type] += 1
+	crop_harvests[crop_type] = int(crop_harvests.get(crop_type, 0)) + 1
 	total_harvested += 1
+	farmer_xp += 1
 	
 	plot.crop_type = null
 	plot.planted_time = 0.0
 	plot.growth_stage = 0
 	plot.is_ready = false
+	plot.watered = false
 	plot.unlocked = true
 	return true
+
+func last_harvest_gold_value(crop_type: String) -> int:
+	var crop_data = crops.get(crop_type)
+	if crop_data == null:
+		return 0
+	return int(crop_data.sell_price)
 
 func process_product(product_type: String, amount: int = 1) -> bool:
 	var product_data = products.get(product_type)
@@ -860,6 +925,9 @@ func do_prestige() -> Dictionary:
 	
 	# Reset progress but keep permanent upgrades
 	gold = 50
+	water = WATER_MAX
+	robot_energy = ROBOT_ENERGY_MAX
+	farmer_xp = 0
 	_initialize_farm_grid()
 	_initialize_inventory()
 	

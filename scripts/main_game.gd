@@ -37,8 +37,27 @@ extends Control
 @onready var update_button: Button = %UpdateButton
 @onready var version_label: Label = %VersionLabel
 @onready var version_request: HTTPRequest = %VersionRequest
+@onready var level_label: Label = %LevelLabel
+@onready var level_bar: ProgressBar = %LevelBar
+@onready var resource_bars: PanelContainer = %ResourceBars
+@onready var water_icon: TextureRect = %WaterIcon
+@onready var water_bar: ProgressBar = %WaterBar
+@onready var water_label: Label = %WaterLabel
+@onready var energy_icon: TextureRect = %EnergyIcon
+@onready var energy_bar: ProgressBar = %EnergyBar
+@onready var energy_label: Label = %EnergyLabel
+@onready var farm_center: CenterContainer = %FarmCenter
+@onready var content_panel: PanelContainer = %ContentPanel
+@onready var title_label: Label = $SafeArea/Layout/TopBar/TopRow/TitleBlock/TitleLabel
+@onready var layout_box: VBoxContainer = $SafeArea/Layout
+@onready var tab_bar: HBoxContainer = %TabBar
 
 var app_update: AppUpdate
+const PLOT_DISPLAY_SIZE := 48
+const GRID_GAP := 2
+const FARM_FRAME_PAD := 12
+const CONTENT_MIN_HEIGHT := 108
+const CROP_CHIP_DRAG_THRESHOLD := 10.0
 var save_vault: SaveVault
 var plot_nodes = []
 var update_check_timer: float = 0.0
@@ -57,6 +76,9 @@ var coin_rush_taps: int = 0
 var coin_rush_cooldown: float = 0.0
 var broke_prompt_cooldown: float = 0.0
 var art := PixelArtGenerator.new()
+var active_robot_plot: Vector2i = Vector2i(-1, -1)
+var robot_plot_timer: float = 0.0
+var _crop_chip_touch: Dictionary = {}
 
 const ROBOT_WARMUP_SECONDS := 6.0
 const COIN_RUSH_COOLDOWN := 90.0
@@ -133,10 +155,12 @@ var achievements: Dictionary = {
 
 func _ready():
 	theme = FarmTheme.create()
-	texture_filter = TEXTURE_FILTER_LINEAR
+	texture_filter = TEXTURE_FILTER_NEAREST
 	_apply_backdrop()
-	_configure_touch_scroll()
+	_configure_mobile_layout()
 	_load_game()
+	app_update = AppUpdate.new()
+	app_update.connect_installer_signals()
 	_setup_farm_grid()
 	_setup_ui()
 	_show_tab("market")
@@ -146,8 +170,6 @@ func _ready():
 	save_vault = SaveVault.new()
 	if not save_vault.read_finished.is_connected(_on_cloud_save_read):
 		save_vault.read_finished.connect(_on_cloud_save_read)
-	app_update = AppUpdate.new()
-	app_update.connect_installer_signals()
 	app_update.update_available.connect(_on_update_available)
 	app_update.status_changed.connect(_on_update_status_changed)
 	if not update_button.pressed.is_connected(_on_update_button_pressed):
@@ -157,21 +179,69 @@ func _ready():
 	call_deferred("_restore_cloud_save")
 	set_process(true)
 
-func _configure_touch_scroll():
-	for scroll in [crop_scroll, market_scroll, robot_scroll, upgrade_scroll, progress_scroll]:
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-		if scroll != crop_scroll:
-			scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	crop_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+func _configure_mobile_layout():
+	var farm_scroll := layout_box.get_node_or_null("FarmScroll")
+	if farm_scroll:
+		layout_box.add_child(farm_panel)
+		layout_box.move_child(farm_panel, farm_scroll.get_index())
+		farm_scroll.queue_free()
+	layout_box.move_child(tab_bar, layout_box.get_child_count() - 1)
+	farm_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	content_panel.custom_minimum_size = Vector2(0, CONTENT_MIN_HEIGHT)
+	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	crop_scroll.custom_minimum_size = Vector2(0, 68)
+	farm_hint.add_theme_font_size_override("font_size", 11)
+	for scroll in [market_scroll, robot_scroll, upgrade_scroll, progress_scroll]:
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+func _farm_block_height() -> int:
+	var rows: int = game_data.grid_size.y
+	var inner_h: int = rows * PLOT_DISPLAY_SIZE + (rows - 1) * GRID_GAP
+	return inner_h + FARM_FRAME_PAD * 2
+
+func _resize_farm_panel() -> void:
+	farm_panel.custom_minimum_size = Vector2(0, _farm_block_height())
+	var cols: int = game_data.grid_size.x
+	var rows: int = game_data.grid_size.y
+	var inner_w: int = cols * PLOT_DISPLAY_SIZE + (cols - 1) * GRID_GAP
+	var inner_h: int = rows * PLOT_DISPLAY_SIZE + (rows - 1) * GRID_GAP
+	var host := farm_center.get_node_or_null("FarmHost") as Control
+	if host:
+		host.custom_minimum_size = Vector2(inner_w + FARM_FRAME_PAD * 2, inner_h + FARM_FRAME_PAD * 2)
+		var frame := host.get_node_or_null("FarmFrame") as NinePatchRect
+		if frame:
+			frame.texture = ImageTexture.create_from_image(
+				art.create_farm_fence_frame(inner_w, inner_h, FARM_FRAME_PAD)
+			)
+			frame.texture_filter = TEXTURE_FILTER_NEAREST
+			frame.patch_margin_left = FARM_FRAME_PAD
+			frame.patch_margin_top = FARM_FRAME_PAD
+			frame.patch_margin_right = FARM_FRAME_PAD
+			frame.patch_margin_bottom = FARM_FRAME_PAD
 
 func _apply_backdrop():
-	background.texture = ImageTexture.create_from_image(art.create_background(160, 284))
+	FarmTheme.reset_textures()
+	background.texture = ImageTexture.create_from_image(art.create_background(480, 854))
+	background.texture_filter = TEXTURE_FILTER_NEAREST
 	coin_icon.texture = ImageTexture.create_from_image(art.create_coin_icon())
+	water_icon.texture = ImageTexture.create_from_image(art.create_water_icon())
+	energy_icon.texture = ImageTexture.create_from_image(art.create_energy_icon())
 	top_bar.add_theme_stylebox_override("panel", FarmTheme.top_bar_style())
 	gold_chip.add_theme_stylebox_override("panel", FarmTheme.gold_chip_style())
-	farm_panel.add_theme_stylebox_override("panel", FarmTheme._panel(Color(0.98, 0.94, 0.84, 0.94), FarmTheme.WOOD, 14, 3, 8))
-	toast.add_theme_stylebox_override("normal", FarmTheme._panel(Color(0.22, 0.14, 0.08, 0.88), FarmTheme.GOLD_DEEP, 12, 2, 10))
-	update_banner.add_theme_stylebox_override("panel", FarmTheme._panel(Color(0.93, 0.86, 0.62), FarmTheme.GOLD_DEEP, 12, 2, 8))
+	farm_panel.add_theme_stylebox_override("panel", FarmTheme.transparent_panel())
+	content_panel.add_theme_stylebox_override("panel", FarmTheme.wood_panel(10))
+	resource_bars.add_theme_stylebox_override("panel", FarmTheme.resource_panel_style())
+	toast.add_theme_stylebox_override("normal", FarmTheme.wood_panel(8))
+	update_banner.add_theme_stylebox_override("panel", FarmTheme.wood_panel(8, true))
+	water_bar.add_theme_stylebox_override("background", FarmTheme.water_bar_bg())
+	water_bar.add_theme_stylebox_override("fill", FarmTheme.water_bar_fill())
+	energy_bar.add_theme_stylebox_override("background", FarmTheme.energy_bar_bg())
+	energy_bar.add_theme_stylebox_override("fill", FarmTheme.energy_bar_fill())
+	level_bar.add_theme_stylebox_override("background", FarmTheme.level_bar_bg())
+	level_bar.add_theme_stylebox_override("fill", FarmTheme.level_bar_fill())
+	_apply_tab_icons()
+	_apply_pixel_label_colors()
 
 func _update_version_label():
 	version_label.text = "v%s · %d" % [
@@ -210,8 +280,44 @@ func _refresh_update_banner():
 	update_button.disabled = app_update.busy
 	update_button.text = "Downloading…" if app_update.busy else ("Install now" if app_update.ready else "Download update")
 
+func _apply_pixel_label_colors():
+	title_label.add_theme_font_size_override("font_size", 18)
+	title_label.add_theme_color_override("font_color", FarmTheme.CREAM)
+	title_label.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.02, 0.85))
+	title_label.add_theme_constant_override("outline_size", 2)
+	version_label.visible = false
+	subtitle_label.add_theme_font_size_override("font_size", 11)
+	subtitle_label.add_theme_color_override("font_color", FarmTheme.CREAM_MUTED)
+	level_label.add_theme_font_size_override("font_size", 10)
+	level_label.add_theme_color_override("font_color", FarmTheme.CREAM_MUTED)
+	farm_hint.add_theme_color_override("font_color", FarmTheme.CREAM)
+	farm_hint.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.02, 0.9))
+	farm_hint.add_theme_constant_override("outline_size", 3)
+	gold_label.add_theme_color_override("font_color", Color(0.98, 0.88, 0.42))
+	water_label.add_theme_color_override("font_color", FarmTheme.CREAM_MUTED)
+	energy_label.add_theme_color_override("font_color", FarmTheme.CREAM_MUTED)
+
+func _apply_tab_icons():
+	var tabs := {
+		"market": market_tab,
+		"bots": bots_tab,
+		"upgrades": upgrades_tab,
+		"progress": progress_tab
+	}
+	for tab_id in tabs:
+		var button: Button = tabs[tab_id]
+		button.icon = ImageTexture.create_from_image(art.create_tab_icon(tab_id))
+		button.expand_icon = true
+		button.add_theme_constant_override("icon_max_width", 26)
+		button.add_theme_font_size_override("font_size", 12)
+		button.add_theme_color_override("font_color", FarmTheme.CREAM)
+
 func _process(delta):
 	game_data.play_time += delta
+	game_data.regen_resources(delta)
+	robot_plot_timer = maxf(0.0, robot_plot_timer - delta)
+	if robot_plot_timer <= 0.0:
+		_clear_robot_marker()
 	update_check_timer += delta
 	if update_check_timer >= UPDATE_CHECK_INTERVAL:
 		update_check_timer = 0.0
@@ -243,14 +349,43 @@ func _setup_farm_grid():
 		plot_nodes.append([])
 		for y in game_data.grid_size.y:
 			plot_nodes[x].append(null)
-	for y in game_data.grid_size.y:
-		for x in game_data.grid_size.x:
+	var cols: int = game_data.grid_size.x
+	var rows: int = game_data.grid_size.y
+	var inner_w: int = cols * PLOT_DISPLAY_SIZE + (cols - 1) * GRID_GAP
+	var inner_h: int = rows * PLOT_DISPLAY_SIZE + (rows - 1) * GRID_GAP
+	if farm_center.get_node_or_null("FarmHost") == null:
+		var host := Control.new()
+		host.name = "FarmHost"
+		host.custom_minimum_size = Vector2(inner_w + FARM_FRAME_PAD * 2, inner_h + FARM_FRAME_PAD * 2)
+		var frame := NinePatchRect.new()
+		frame.name = "FarmFrame"
+		frame.texture = ImageTexture.create_from_image(art.create_farm_fence_frame(inner_w, inner_h, FARM_FRAME_PAD))
+		frame.texture_filter = TEXTURE_FILTER_NEAREST
+		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		frame.patch_margin_left = FARM_FRAME_PAD
+		frame.patch_margin_top = FARM_FRAME_PAD
+		frame.patch_margin_right = FARM_FRAME_PAD
+		frame.patch_margin_bottom = FARM_FRAME_PAD
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		host.add_child(frame)
+		farm_grid.reparent(host)
+		farm_grid.position = Vector2(FARM_FRAME_PAD, FARM_FRAME_PAD)
+		farm_center.add_child(host)
+	farm_grid.columns = cols
+	farm_grid.add_theme_constant_override("h_separation", GRID_GAP)
+	farm_grid.add_theme_constant_override("v_separation", GRID_GAP)
+	for child in farm_grid.get_children():
+		farm_grid.remove_child(child)
+		child.queue_free()
+	for y in rows:
+		for x in cols:
 			var plot = preload("res://scenes/plot.tscn").instantiate()
 			plot.grid_position = Vector2i(x, y)
 			plot.game_data = game_data
 			plot.plot_pressed.connect(_on_plot_pressed)
 			farm_grid.add_child(plot)
 			plot_nodes[x][y] = plot
+	_resize_farm_panel()
 	_refresh_farm_visuals()
 
 func _setup_ui():
@@ -293,10 +428,12 @@ func _show_tab(tab_name: String):
 	_style_tab(progress_tab, tab_name == "progress")
 
 func _style_tab(button: Button, active: bool):
-	button.add_theme_stylebox_override("normal", FarmTheme.tab_style(active))
-	button.add_theme_stylebox_override("hover", FarmTheme.tab_style(active))
-	button.add_theme_stylebox_override("pressed", FarmTheme.tab_style(true))
-	button.add_theme_color_override("font_color", FarmTheme.CREAM if active else Color(0.95, 0.88, 0.74))
+	var style := FarmTheme.tab_style(active)
+	button.add_theme_stylebox_override("normal", style)
+	button.add_theme_stylebox_override("hover", style)
+	button.add_theme_stylebox_override("pressed", style)
+	button.add_theme_color_override("font_color", FarmTheme.GOLD if active else FarmTheme.CREAM_MUTED)
+	button.modulate = Color(1.05, 1.02, 0.92) if active else Color(0.82, 0.78, 0.72)
 
 func _format_gold(amount: float) -> String:
 	var value := int(amount)
@@ -311,11 +448,21 @@ func _format_gold(amount: float) -> String:
 	return result
 
 func _update_gold_display():
-	gold_label.text = _format_gold(game_data.gold)
+	gold_label.text = _format_gold(game_data.gold) + "g"
 	var crop_data = game_data.crops.get(game_data.selected_crop, {})
 	var tier := int(crop_data.get("tier", 1))
 	var grow := int(crop_data.get("growth_time", 0))
-	subtitle_label.text = "T" + str(tier) + " " + str(crop_data.get("name", "Wheat")) + "  ·  " + str(grow) + "s  ·  " + str(game_data.unlocked_plot_count()) + "/" + str(game_data.total_plot_count()) + " plots"
+	subtitle_label.text = "T" + str(tier) + " " + str(crop_data.get("name", "Wheat")) + " · " + str(grow) + "s · " + str(game_data.unlocked_plot_count()) + "/" + str(game_data.total_plot_count()) + " plots · v" + app_update.get_local_version_name()
+	var xp_into := game_data.farmer_xp_into_level()
+	level_label.text = "Next Level " + str(xp_into) + " / " + str(GameData.FARMER_XP_PER_LEVEL)
+	level_bar.max_value = float(GameData.FARMER_XP_PER_LEVEL)
+	level_bar.value = float(xp_into)
+	water_bar.max_value = GameData.WATER_MAX
+	water_bar.value = game_data.water
+	water_label.text = str(int(floor(game_data.water))) + " / " + str(int(GameData.WATER_MAX))
+	energy_bar.max_value = GameData.ROBOT_ENERGY_MAX
+	energy_bar.value = game_data.robot_energy
+	energy_label.text = str(int(floor(game_data.robot_energy))) + " / " + str(int(GameData.ROBOT_ENERGY_MAX))
 	_update_farm_hint()
 
 func _update_farm_hint():
@@ -339,14 +486,11 @@ func _clear_children(node: Node):
 		child.queue_free()
 
 func _style_crop_chip(chip: Button, selected: bool, locked: bool = false, ready: bool = false):
-	if locked:
-		chip.add_theme_stylebox_override("normal", FarmTheme.locked_chip_style(ready))
-		chip.add_theme_stylebox_override("hover", FarmTheme.locked_chip_style(true))
-		chip.add_theme_stylebox_override("pressed", FarmTheme.locked_chip_style(ready))
-	else:
-		chip.add_theme_stylebox_override("normal", FarmTheme.chip_style(selected))
-		chip.add_theme_stylebox_override("hover", FarmTheme.chip_style(true))
-		chip.add_theme_stylebox_override("pressed", FarmTheme.chip_style(true))
+	var normal := FarmTheme.chip_style(selected, ready) if not locked else FarmTheme.locked_chip_style(ready)
+	var hover := FarmTheme.chip_style(true, ready) if not locked else FarmTheme.locked_chip_style(true)
+	chip.add_theme_stylebox_override("normal", normal)
+	chip.add_theme_stylebox_override("hover", hover)
+	chip.add_theme_stylebox_override("pressed", hover)
 
 func _crop_chip_text(crop_id: String) -> String:
 	var crop_data = game_data.crops[crop_id]
@@ -372,16 +516,17 @@ func _setup_crop_selector():
 		var crop_data = game_data.crops[crop_id]
 		var chip := Button.new()
 		chip.set_meta("crop_id", crop_id)
-		chip.custom_minimum_size = Vector2(132, 76)
+		chip.custom_minimum_size = Vector2(76, 68)
 		chip.icon = ImageTexture.create_from_image(art.create_crop_sprite(crop_id, crop_data.color))
 		chip.expand_icon = true
-		chip.add_theme_constant_override("icon_max_width", 38)
-		chip.add_theme_font_size_override("font_size", 14)
-		chip.add_theme_color_override("font_color", FarmTheme.INK)
-		chip.add_theme_color_override("font_pressed_color", FarmTheme.INK)
-		chip.add_theme_color_override("font_hover_color", FarmTheme.INK)
+		chip.add_theme_constant_override("icon_max_width", 36)
+		chip.add_theme_font_size_override("font_size", 10)
+		chip.add_theme_color_override("font_color", FarmTheme.CREAM)
+		chip.add_theme_color_override("font_pressed_color", FarmTheme.GOLD)
+		chip.add_theme_color_override("font_hover_color", Color.WHITE)
 		_apply_crop_chip(chip, crop_id)
-		chip.pressed.connect(_on_crop_chip_pressed.bind(crop_id))
+		chip.focus_mode = Control.FOCUS_NONE
+		chip.gui_input.connect(_on_crop_chip_gui_input.bind(crop_id, chip))
 		crop_bar.add_child(chip)
 
 func _refresh_crop_chips():
@@ -391,6 +536,45 @@ func _refresh_crop_chips():
 	for child in crop_bar.get_children():
 		if child is Button:
 			_apply_crop_chip(child, child.get_meta("crop_id"))
+
+func _on_crop_chip_gui_input(event: InputEvent, crop_id: String, chip: Button) -> void:
+	var key := chip.get_instance_id()
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_crop_chip_touch[key] = {"start": event.position, "dragging": false}
+		else:
+			var touch: Dictionary = _crop_chip_touch.get(key, {})
+			_crop_chip_touch.erase(key)
+			if not touch.get("dragging", false):
+				_on_crop_chip_pressed(crop_id)
+			chip.accept_event()
+	elif event is InputEventScreenDrag:
+		var touch: Dictionary = _crop_chip_touch.get(key, {})
+		if touch.is_empty():
+			return
+		if event.position.distance_to(touch["start"]) > CROP_CHIP_DRAG_THRESHOLD:
+			touch["dragging"] = true
+		if touch["dragging"]:
+			crop_scroll.pan_by(event.relative)
+			chip.accept_event()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_crop_chip_touch[key] = {"start": event.position, "dragging": false}
+		else:
+			var touch: Dictionary = _crop_chip_touch.get(key, {})
+			_crop_chip_touch.erase(key)
+			if not touch.get("dragging", false):
+				_on_crop_chip_pressed(crop_id)
+			chip.accept_event()
+	elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		var touch: Dictionary = _crop_chip_touch.get(key, {})
+		if touch.is_empty():
+			return
+		if event.position.distance_to(touch["start"]) > CROP_CHIP_DRAG_THRESHOLD:
+			touch["dragging"] = true
+		if touch["dragging"]:
+			crop_scroll.pan_by(event.relative)
+			chip.accept_event()
 
 func _on_crop_chip_pressed(crop_id: String):
 	if game_data.is_crop_unlocked(crop_id):
@@ -416,28 +600,34 @@ func _setup_robot_panel():
 		var robot = game_data.robots[robot_id]
 		var level := game_data.get_robot_level(robot)
 		var card := PanelContainer.new()
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
 		card.add_theme_stylebox_override("panel", FarmTheme.row_style())
 		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.add_theme_constant_override("separation", 10)
 		var icon := TextureRect.new()
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.texture_filter = TEXTURE_FILTER_NEAREST
 		icon.custom_minimum_size = Vector2(36, 36)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.texture = robot_icon
 		var info := VBoxContainer.new()
+		info.mouse_filter = Control.MOUSE_FILTER_PASS
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var title := Label.new()
 		if level > 0:
 			title.text = robot.name + "  ·  Lv " + str(level)
 		else:
 			title.text = robot.name
+		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		title.add_theme_font_size_override("font_size", 16)
 		var help := Label.new()
 		if level > 0:
 			help.text = ROBOT_HELP.get(robot_id, "") + "\n" + _robot_progress_text(robot_id)
 		else:
 			help.text = ROBOT_HELP.get(robot_id, "") + "\nHire to start, then keep upgrading."
+		help.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		help.add_theme_font_size_override("font_size", 12)
 		help.add_theme_color_override("font_color", FarmTheme.MUTED)
@@ -499,6 +689,7 @@ func _refresh_inventory_panel():
 	_clear_children(market_list)
 	var header := Label.new()
 	header.text = "Crops"
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header.add_theme_font_size_override("font_size", 14)
 	header.add_theme_color_override("font_color", FarmTheme.MUTED)
 	market_list.add_child(header)
@@ -519,6 +710,7 @@ func _refresh_inventory_panel():
 	
 	var crafted := Label.new()
 	crafted.text = "Products"
+	crafted.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	crafted.add_theme_font_size_override("font_size", 14)
 	crafted.add_theme_color_override("font_color", FarmTheme.MUTED)
 	market_list.add_child(crafted)
@@ -542,22 +734,28 @@ func _refresh_inventory_panel():
 
 func _add_product_row(icon_image: Image, title_text: String, subtitle_text: String, can_make: bool, can_sell: bool, product_id: String):
 	var card := PanelContainer.new()
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.add_theme_stylebox_override("panel", FarmTheme.row_style())
 	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_theme_constant_override("separation", 10)
 	var icon := TextureRect.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.texture_filter = TEXTURE_FILTER_NEAREST
 	icon.custom_minimum_size = Vector2(32, 32)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture = ImageTexture.create_from_image(icon_image)
 	var info := VBoxContainer.new()
+	info.mouse_filter = Control.MOUSE_FILTER_PASS
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var title := Label.new()
 	title.text = title_text
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.add_theme_font_size_override("font_size", 15)
 	var subtitle := Label.new()
 	subtitle.text = subtitle_text
+	subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	subtitle.add_theme_font_size_override("font_size", 12)
 	subtitle.add_theme_color_override("font_color", FarmTheme.MUTED)
 	info.add_child(title)
@@ -586,22 +784,28 @@ func _add_product_row(icon_image: Image, title_text: String, subtitle_text: Stri
 
 func _add_market_row(icon_image: Image, title_text: String, subtitle_text: String, action_text: String, enabled: bool, callback: Callable):
 	var card := PanelContainer.new()
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.add_theme_stylebox_override("panel", FarmTheme.row_style())
 	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_theme_constant_override("separation", 10)
 	var icon := TextureRect.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.texture_filter = TEXTURE_FILTER_NEAREST
 	icon.custom_minimum_size = Vector2(32, 32)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture = ImageTexture.create_from_image(icon_image)
 	var info := VBoxContainer.new()
+	info.mouse_filter = Control.MOUSE_FILTER_PASS
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var title := Label.new()
 	title.text = title_text
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.add_theme_font_size_override("font_size", 15)
 	var subtitle := Label.new()
 	subtitle.text = subtitle_text
+	subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	subtitle.add_theme_font_size_override("font_size", 12)
 	subtitle.add_theme_color_override("font_color", FarmTheme.MUTED)
 	info.add_child(title)
@@ -641,6 +845,7 @@ func _setup_upgrades_panel():
 	_clear_children(upgrade_list)
 	var header := Label.new()
 	header.text = "Spend gold to improve this run."
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header.add_theme_font_size_override("font_size", 13)
 	header.add_theme_color_override("font_color", FarmTheme.MUTED)
@@ -648,16 +853,21 @@ func _setup_upgrades_panel():
 	for upgrade_id in game_data.farm_upgrades:
 		var upgrade = game_data.farm_upgrades[upgrade_id]
 		var card := PanelContainer.new()
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
 		card.add_theme_stylebox_override("panel", FarmTheme.row_style())
 		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.add_theme_constant_override("separation", 10)
 		var info := VBoxContainer.new()
+		info.mouse_filter = Control.MOUSE_FILTER_PASS
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var title := Label.new()
 		title.text = upgrade.name + "  ·  Lv " + str(upgrade.current_level) + "/" + str(upgrade.max_level)
+		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		title.add_theme_font_size_override("font_size", 15)
 		var help := Label.new()
 		help.text = upgrade.description
+		help.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		help.add_theme_font_size_override("font_size", 12)
 		help.add_theme_color_override("font_color", FarmTheme.MUTED)
 		info.add_child(title)
@@ -791,7 +1001,8 @@ func _update_crop_growth(_delta):
 			var plot_data = game_data.get_plot_data(Vector2i(x, y))
 			if plot_data.is_empty() or not plot_data.get("unlocked", false):
 				continue
-			if plot_data.get("crop_type", null) != null and not plot_data.get("is_ready", false):
+			if plot_data.get("crop_type", null) != null and not plot_data.get("is_ready", false) \
+					and plot_data.get("watered", false):
 				var crop_data = game_data.crops[plot_data.crop_type]
 				var elapsed = (current_time - plot_data.planted_time) * growth_multiplier
 				var progress = elapsed / crop_data.growth_time
@@ -805,46 +1016,64 @@ func _update_crop_growth(_delta):
 				plot_nodes[x][y].update_visual(plot_data)
 
 func _auto_robot_actions(delta):
+	if not game_data.has_active_robots():
+		return
 	var robot_multiplier := _robot_multiplier()
 	var harvester = game_data.robots.get("harvester")
-	if harvester and harvester.owned and _robot_ready("harvester", delta):
+	if harvester and harvester.owned and _robot_ready("harvester", delta) and game_data.can_spend_robot_energy(0.01):
 		harvest_accumulator += delta * game_data.robot_work_speed("harvester") * robot_multiplier
 		if harvest_accumulator >= 1.0:
-			var ticks := int(floor(harvest_accumulator))
-			_auto_harvest(ticks * game_data.robot_batch_size("harvester"))
-			harvest_accumulator = fmod(harvest_accumulator, 1.0)
+			if game_data.spend_robot_energy():
+				var ticks := int(floor(harvest_accumulator))
+				_auto_harvest(ticks * game_data.robot_batch_size("harvester"))
+				harvest_accumulator = fmod(harvest_accumulator, 1.0)
+			else:
+				harvest_accumulator = 0.0
 	var planter = game_data.robots.get("planter")
-	if planter and planter.owned and _robot_ready("planter", delta):
+	if planter and planter.owned and _robot_ready("planter", delta) and game_data.can_spend_robot_energy(0.01):
 		plant_accumulator += delta * game_data.robot_work_speed("planter") * robot_multiplier
 		if plant_accumulator >= 1.0:
-			var ticks := int(floor(plant_accumulator))
-			_auto_plant(ticks * game_data.robot_batch_size("planter"))
-			plant_accumulator = fmod(plant_accumulator, 1.0)
+			if game_data.spend_robot_energy():
+				var ticks := int(floor(plant_accumulator))
+				_auto_plant(ticks * game_data.robot_batch_size("planter"))
+				plant_accumulator = fmod(plant_accumulator, 1.0)
+			else:
+				plant_accumulator = 0.0
 	var processor = game_data.robots.get("processor")
-	if processor and processor.owned and _robot_ready("processor", delta):
+	if processor and processor.owned and _robot_ready("processor", delta) and game_data.can_spend_robot_energy(0.01):
 		process_accumulator += delta * game_data.robot_work_speed("processor") * robot_multiplier
 		if process_accumulator >= 1.0:
-			var ticks := int(floor(process_accumulator))
-			_auto_process(ticks * game_data.robot_batch_size("processor"))
-			process_accumulator = fmod(process_accumulator, 1.0)
+			if game_data.spend_robot_energy():
+				var ticks := int(floor(process_accumulator))
+				_auto_process(ticks * game_data.robot_batch_size("processor"))
+				process_accumulator = fmod(process_accumulator, 1.0)
+			else:
+				process_accumulator = 0.0
 	var seller = game_data.robots.get("seller")
-	if seller and seller.owned and _robot_ready("seller", delta):
+	if seller and seller.owned and _robot_ready("seller", delta) and game_data.can_spend_robot_energy(0.01):
 		sell_accumulator += delta * game_data.robot_work_speed("seller") * robot_multiplier
 		if sell_accumulator >= 1.0:
-			var ticks := int(floor(sell_accumulator))
-			_auto_sell(ticks * game_data.robot_batch_size("seller"))
-			sell_accumulator = fmod(sell_accumulator, 1.0)
+			if game_data.spend_robot_energy():
+				var ticks := int(floor(sell_accumulator))
+				_auto_sell(ticks * game_data.robot_batch_size("seller"))
+				sell_accumulator = fmod(sell_accumulator, 1.0)
+			else:
+				sell_accumulator = 0.0
 
 func _auto_harvest(harvest_count):
 	for x in game_data.grid_size.x:
 		for y in game_data.grid_size.y:
 			if harvest_count <= 0:
 				return
-			var plot_data = game_data.get_plot_data(Vector2i(x, y))
+			var pos := Vector2i(x, y)
+			var plot_data = game_data.get_plot_data(pos)
 			if plot_data.get("crop_type", null) != null and plot_data.get("is_ready", false):
-				if game_data.harvest_crop(Vector2i(x, y)):
+				var crop_type: String = plot_data.crop_type
+				if game_data.harvest_crop(pos):
 					harvest_count -= 1
-					plot_nodes[x][y].update_visual(game_data.get_plot_data(Vector2i(x, y)))
+					_show_robot_at(pos, 1.2)
+					_spawn_harvest_popup(pos, game_data.last_harvest_gold_value(crop_type))
+					plot_nodes[x][y].update_visual(game_data.get_plot_data(pos))
 					_on_crops_changed()
 
 func _auto_plant(plant_count):
@@ -852,11 +1081,13 @@ func _auto_plant(plant_count):
 		for y in game_data.grid_size.y:
 			if plant_count <= 0:
 				return
-			var plot_data = game_data.get_plot_data(Vector2i(x, y))
+			var pos := Vector2i(x, y)
+			var plot_data = game_data.get_plot_data(pos)
 			if plot_data.get("unlocked", false) and plot_data.get("crop_type", null) == null:
-				if game_data.plant_crop(Vector2i(x, y), game_data.selected_crop):
+				if game_data.plant_crop(pos, game_data.selected_crop):
 					plant_count -= 1
-					plot_nodes[x][y].update_visual(game_data.get_plot_data(Vector2i(x, y)))
+					_show_robot_at(pos, 0.9)
+					plot_nodes[x][y].update_visual(game_data.get_plot_data(pos))
 
 func _auto_process(process_count):
 	for product_id in game_data.products.keys():
@@ -904,13 +1135,17 @@ func _on_plot_pressed(grid_pos: Vector2i):
 			plot_nodes[grid_pos.x][grid_pos.y].update_visual(game_data.get_plot_data(grid_pos))
 		elif not game_data.is_crop_unlocked(game_data.selected_crop):
 			_show_toast("Unlock this crop first")
+		elif not game_data.can_spend_water():
+			_show_toast("Need water to plant — wait for the well to refill")
 		else:
 			var cost = game_data.crops[game_data.selected_crop].cost
 			_show_toast("Need " + _format_gold(cost) + " gold to plant")
 			if game_data.should_offer_coin_rush() and coin_rush_cooldown <= 0.0:
 				_offer_coin_rush()
 	elif plot_data.get("is_ready", false):
+		var crop_type: String = plot_data.crop_type
 		if game_data.harvest_crop(grid_pos):
+			_spawn_harvest_popup(grid_pos, game_data.last_harvest_gold_value(crop_type))
 			plot_nodes[grid_pos.x][grid_pos.y].update_visual(game_data.get_plot_data(grid_pos))
 			_on_crops_changed()
 	else:
@@ -931,7 +1166,42 @@ func _on_prestige_pressed():
 func _refresh_farm_visuals():
 	for x in game_data.grid_size.x:
 		for y in game_data.grid_size.y:
-			plot_nodes[x][y].update_visual(game_data.get_plot_data(Vector2i(x, y)))
+			var pos := Vector2i(x, y)
+			var plot_node = plot_nodes[x][y]
+			plot_node.update_visual(game_data.get_plot_data(pos))
+			plot_node.set_robot_visible(pos == active_robot_plot and robot_plot_timer > 0.0)
+
+func _show_robot_at(grid_pos: Vector2i, seconds: float = 1.0):
+	active_robot_plot = grid_pos
+	robot_plot_timer = seconds
+	if grid_pos.x >= 0 and grid_pos.y >= 0:
+		plot_nodes[grid_pos.x][grid_pos.y].set_robot_visible(true)
+
+func _clear_robot_marker():
+	active_robot_plot = Vector2i(-1, -1)
+	for column in plot_nodes:
+		for plot_node in column:
+			if plot_node:
+				plot_node.set_robot_visible(false)
+
+func _spawn_harvest_popup(grid_pos: Vector2i, gold_value: int):
+	if gold_value <= 0:
+		return
+	var plot_node = plot_nodes[grid_pos.x][grid_pos.y]
+	var label := Label.new()
+	label.text = "+" + str(gold_value) + "g"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.35, 0.98, 0.45))
+	label.add_theme_color_override("font_outline_color", Color(0.08, 0.18, 0.08, 0.9))
+	label.add_theme_constant_override("outline_size", 3)
+	label.position = plot_node.global_position + Vector2(4, -8)
+	add_child(label)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 28.0, 0.9)
+	tween.tween_property(label, "modulate:a", 0.0, 0.9)
+	tween.chain().tween_callback(label.queue_free)
 
 func _check_achievements():
 	for achievement_id in achievements:
@@ -986,7 +1256,10 @@ func _build_save_dict() -> Dictionary:
 		"total_gold_earned": game_data.total_gold_earned,
 		"play_time": game_data.play_time,
 		"last_save_time": game_data.last_save_time,
-		"economy_version": 2,
+		"water": game_data.water,
+		"robot_energy": game_data.robot_energy,
+		"farmer_xp": game_data.farmer_xp,
+		"economy_version": 3,
 		"achievements": achievements_save
 	}
 
@@ -1032,12 +1305,18 @@ func _apply_save_dict(save_data: Dictionary) -> void:
 	game_data.total_gold_earned = save_data.get("total_gold_earned", 0.0)
 	game_data.play_time = save_data.get("play_time", 0.0)
 	game_data.last_save_time = save_data.get("last_save_time", 0)
+	game_data.water = float(save_data.get("water", GameData.WATER_MAX))
+	game_data.robot_energy = float(save_data.get("robot_energy", GameData.ROBOT_ENERGY_MAX))
+	game_data.farmer_xp = int(save_data.get("farmer_xp", 0))
 	if int(save_data.get("economy_version", 0)) < 1:
 		game_data.unlocked_crops = ["wheat"]
 		game_data.selected_crop = "wheat"
 	game_data.update_prestige_multipliers()
 	game_data.normalize_crops()
 	game_data.normalize_plots(int(save_data.get("economy_version", 0)) < 2)
+	if int(save_data.get("economy_version", 0)) < 3:
+		game_data.water = GameData.WATER_MAX
+		game_data.robot_energy = GameData.ROBOT_ENERGY_MAX
 	var achievements_save = save_data.get("achievements", {})
 	for achievement_id in achievements_save:
 		if achievements.has(achievement_id):

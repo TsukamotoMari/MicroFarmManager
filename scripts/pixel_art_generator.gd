@@ -3,7 +3,9 @@ class_name PixelArtGenerator
 
 const OUTLINE := Color(0.14, 0.08, 0.05, 0.95)
 
-func create_crop_sprite(crop_type: String, color: Color) -> Image:
+func create_crop_sprite(crop_type: String, color: Color, growth_stage: int = -1, max_stages: int = 3) -> Image:
+	if growth_stage >= 0 and max_stages > 0 and growth_stage < max_stages:
+		return _create_crop_stage_sprite(crop_type, color, growth_stage, max_stages)
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	match crop_type:
@@ -81,74 +83,272 @@ func create_product_sprite(product_id: String, fallback_color: Color = Color.WHI
 	_add_outline(image, OUTLINE)
 	return image
 
-func create_plot_sprite() -> Image:
+func create_plot_sprite(watered: bool = false) -> Image:
 	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
 	for y in 48:
 		for x in 48:
 			var n := sin(x * 0.35) * 0.04 + cos(y * 0.28) * 0.03
 			var edge := mini(mini(x, y), mini(47 - x, 47 - y))
-			if edge < 5:
-				image.set_pixel(x, y, Color(0.32 + n, 0.58 + n, 0.26 + n))
+			if edge < 4:
+				image.set_pixel(x, y, Color(0.28 + n, 0.16 + n * 0.5, 0.08 + n * 0.3))
+			elif edge < 6:
+				image.set_pixel(x, y, Color(0.38 + n, 0.24 + n, 0.12 + n * 0.4))
 			else:
-				var furrow := -0.07 if y % 6 < 2 else 0.0
-				image.set_pixel(x, y, Color(0.50 + n + furrow, 0.32 + n * 0.5, 0.16 + n * 0.3))
-	for i in 4:
-		image.set_pixel(3 + i, 3, Color(0.28, 0.16, 0.08))
-		image.set_pixel(3, 3 + i, Color(0.28, 0.16, 0.08))
-		image.set_pixel(44 - i, 3, Color(0.28, 0.16, 0.08))
-		image.set_pixel(44, 3 + i, Color(0.28, 0.16, 0.08))
-	for p in [Vector2i(8, 2), Vector2i(22, 1), Vector2i(36, 2), Vector2i(2, 20), Vector2i(45, 18)]:
-		_px(image, p.x, p.y, Color(0.28, 0.62, 0.24))
-		_px(image, p.x, p.y - 1, Color(0.40, 0.72, 0.30))
+				var furrow := -0.08 if y % 6 < 2 else 0.0
+				var soil := Color(0.52 + n + furrow, 0.34 + n * 0.5, 0.18 + n * 0.3)
+				if watered and (x + y * 2) % 7 == 0:
+					soil = soil.lerp(Color(0.42, 0.58, 0.78), 0.35)
+				image.set_pixel(x, y, soil)
+	for i in 5:
+		_px(image, 2 + i, 2, Color(0.42, 0.26, 0.12))
+		_px(image, 2, 2 + i, Color(0.42, 0.26, 0.12))
+		_px(image, 41 + i, 2, Color(0.42, 0.26, 0.12))
+		_px(image, 45, 2 + i, Color(0.42, 0.26, 0.12))
+		_px(image, 2 + i, 41, Color(0.32, 0.18, 0.08))
+		_px(image, 2, 41 + i, Color(0.32, 0.18, 0.08))
+		_px(image, 41 + i, 45, Color(0.32, 0.18, 0.08))
+		_px(image, 45, 41 + i, Color(0.32, 0.18, 0.08))
+	if watered:
+		for p in [Vector2i(12, 14), Vector2i(28, 22), Vector2i(18, 32), Vector2i(34, 12)]:
+			_disc(image, p.x, p.y, 2, Color(0.55, 0.78, 0.95, 0.55))
+	return image
+
+func create_water_overlay() -> Image:
+	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	for y in 48:
+		for x in 48:
+			if (x + y * 3 + int(sin(x * 0.4) * 2.0)) % 9 == 0:
+				_px(image, x, y, Color(0.45, 0.72, 0.98, 0.28))
+			elif (x * 2 + y) % 11 == 0:
+				_px(image, x, y, Color(0.72, 0.90, 1.0, 0.18))
 	return image
 
 func create_locked_plot_sprite() -> Image:
 	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
 	for y in 48:
 		for x in 48:
-			var n := sin(x * 0.22 + y * 0.18) * 0.04
-			var tuft := 0.05 if int(x * 3 + y * 5) % 11 == 0 else 0.0
-			image.set_pixel(x, y, Color(0.28 + n, 0.46 + n + tuft, 0.22 + n))
-	for i in 48:
-		if i % 4 < 2:
-			_px(image, i, 0, Color(0.20, 0.34, 0.16))
-			_px(image, i, 47, Color(0.20, 0.34, 0.16))
-			_px(image, 0, i, Color(0.20, 0.34, 0.16))
-			_px(image, 47, i, Color(0.20, 0.34, 0.16))
-	for p in [Vector2i(12, 18), Vector2i(30, 14), Vector2i(22, 28), Vector2i(36, 32)]:
-		_px(image, p.x, p.y, Color(0.42, 0.36, 0.24))
-		_px(image, p.x + 1, p.y, Color(0.50, 0.44, 0.30))
+			var n := sin(x * 0.35) * 0.03 + cos(y * 0.28) * 0.02
+			var furrow := -0.06 if y % 6 < 2 else 0.0
+			image.set_pixel(x, y, Color(0.36 + n + furrow, 0.26 + n * 0.5, 0.14 + n * 0.3))
+	for y in range(0, 8):
+		for x in 48:
+			if int(x * 2 + y) % 5 == 0:
+				_px(image, x, y, Color(0.28, 0.52, 0.24))
+	for p in [Vector2i(10, 20), Vector2i(28, 16), Vector2i(20, 30), Vector2i(34, 26)]:
+		_px(image, p.x, p.y, Color(0.48, 0.38, 0.22))
+		_px(image, p.x + 1, p.y, Color(0.56, 0.46, 0.28))
+	return image
+
+func create_wood_panel_tile(size: int = 64, highlight: bool = false) -> Image:
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var edge := Color(0.08, 0.04, 0.02)
+	var dark := Color(0.18, 0.10, 0.05)
+	var mid := Color(0.32, 0.18, 0.08)
+	var lite := Color(0.50, 0.30, 0.14)
+	var gold_trim := Color(0.88, 0.66, 0.18)
+	for y in size:
+		for x in size:
+			var c := mid
+			if x < 2 or y < 2 or x >= size - 2 or y >= size - 2:
+				c = edge
+			elif x < 4 or y < 4 or x >= size - 4 or y >= size - 4:
+				c = dark
+			else:
+				var plank := int(y / 8) % 2 == 0
+				c = mid if plank else mid.darkened(0.06)
+				if int(x / 3) % 2 == 0:
+					c = c.lightened(0.03)
+				if x < 7:
+					c = c.lerp(lite, 0.18)
+			if highlight and (x >= size - 5 or y < 5):
+				c = c.lerp(gold_trim, 0.25)
+			image.set_pixel(x, y, c)
+	return image
+
+func create_chip_tile(selected: bool, ready: bool = false) -> Image:
+	var image := Image.create(40, 40, false, Image.FORMAT_RGBA8)
+	var bg := Color(0.28, 0.16, 0.08)
+	var border := Color(0.14, 0.08, 0.04)
+	if selected:
+		bg = Color(0.42, 0.24, 0.08)
+		border = Color(0.92, 0.72, 0.18)
+	elif ready:
+		bg = Color(0.34, 0.22, 0.10)
+		border = Color(0.72, 0.52, 0.14)
+	for y in 40:
+		for x in 40:
+			var c := bg
+			if x < 2 or y < 2 or x >= 38 or y >= 38:
+				c = border
+			elif x < 4 or y < 4 or x >= 36 or y >= 36:
+				c = bg.darkened(0.08)
+			image.set_pixel(x, y, c)
+	return image
+
+func create_farm_fence_frame(inner_w: int, inner_h: int, border: int = 12) -> Image:
+	var w := inner_w + border * 2
+	var h := inner_h + border * 2
+	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var grass_a := Color(0.30, 0.58, 0.26, 0.55)
+	var grass_b := Color(0.24, 0.48, 0.22, 0.45)
+	for y in h:
+		for x in w:
+			if x >= border and x < w - border and y >= border and y < h - border:
+				_px(image, x, y, grass_a if (x + y) % 7 == 0 else grass_b)
+			else:
+				var post := x % 16 < 4 or y % 16 < 4
+				var c := Color(0.58, 0.36, 0.18) if post else Color(0.42, 0.26, 0.12)
+				if x < 2 or y < 2 or x >= w - 2 or y >= h - 2:
+					c = Color(0.22, 0.12, 0.06)
+				_px(image, x, y, c)
+	for px in range(4, w - 4, 14):
+		for py in [3, h - 5]:
+			for i in 6:
+				_px(image, px + i, py, Color(0.68, 0.44, 0.20))
+				_px(image, px + i, py + 1, Color(0.46, 0.28, 0.12))
 	return image
 
 func create_background(width: int, height: int) -> Image:
 	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var horizon := int(height * 0.34)
+	var horizon := int(height * 0.32)
 	for y in height:
-		var t := float(y) / float(height)
 		var color: Color
 		if y < horizon:
-			color = Color(0.45, 0.74, 0.93).lerp(Color(0.78, 0.90, 0.98), float(y) / horizon)
+			var sky_t := float(y) / float(maxi(1, horizon))
+			color = Color(0.38, 0.68, 0.92).lerp(Color(0.72, 0.88, 0.98), sky_t)
+			if y % 3 == 0:
+				color = color.darkened(0.015)
 		else:
-			var g := (t - 0.34) / 0.66
-			color = Color(0.40, 0.68, 0.34).lerp(Color(0.22, 0.46, 0.22), g)
-			if int(y + sin(y * 0.2) * 2) % 9 == 0:
-				color = color.darkened(0.06)
+			var g := (float(y) - horizon) / float(maxi(1, height - horizon))
+			color = Color(0.44, 0.72, 0.36).lerp(Color(0.20, 0.42, 0.20), g)
 		for x in width:
-			var n := 0.0
-			if y >= horizon:
-				n = sin((x + y) * 0.07) * 0.03
-			image.set_pixel(x, y, Color(color.r + n, color.g + n, color.b + n * 0.5))
-	_disc(image, width - 28, 22, 10, Color(1.0, 0.92, 0.55))
-	_disc(image, width - 28, 22, 6, Color(1.0, 0.97, 0.78))
-	_cloud(image, 28, 26, 16)
-	_cloud(image, int(width * 0.42), 18, 12)
+			var n := sin((x + y) * 0.05) * 0.025 if y >= horizon else 0.0
+			image.set_pixel(x, y, Color(color.r + n, color.g + n, color.b + n * 0.4))
+	_disc(image, width - 26, 20, 11, Color(1.0, 0.90, 0.50))
+	_disc(image, width - 26, 20, 7, Color(1.0, 0.97, 0.78))
+	_cloud(image, 24, 24, 14)
+	_cloud(image, int(width * 0.38), 16, 11)
+	_cloud(image, int(width * 0.62), 28, 9)
 	for x in width:
-		var h1 := horizon - 18 - int(sin(x * 0.035) * 10 + cos(x * 0.02) * 6)
-		for y in range(h1, horizon):
-			image.set_pixel(x, y, Color(0.30, 0.55, 0.32))
-		var h2 := horizon - 8 - int(sin(x * 0.05 + 1.2) * 6)
-		for y in range(h2, horizon):
-			image.set_pixel(x, y, Color(0.36, 0.62, 0.34))
+		var h1 := horizon - 22 - int(sin(x * 0.03) * 12 + cos(x * 0.018) * 7)
+		for y in range(maxi(0, h1), horizon):
+			image.set_pixel(x, y, Color(0.26, 0.52, 0.28))
+		var h2 := horizon - 10 - int(sin(x * 0.045 + 1.0) * 7)
+		for y in range(maxi(0, h2), horizon):
+			image.set_pixel(x, y, Color(0.34, 0.62, 0.32))
+	# Barn silhouette
+	var barn_x := int(width * 0.72)
+	var barn_base := horizon + 8
+	for by in range(barn_base, barn_base + 28):
+		for bx in range(barn_x, barn_x + 34):
+			if bx >= width or by >= height:
+				continue
+			if by < barn_base + 10 and bx > barn_x + 8 and bx < barn_x + 26:
+				continue
+			image.set_pixel(bx, by, Color(0.72, 0.18, 0.14))
+	for bx in range(barn_x + 4, barn_x + 30):
+		if bx < width and barn_base + 4 < height:
+			image.set_pixel(bx, barn_base + 4, Color(0.52, 0.12, 0.10))
+	# Windmill
+	var wx := int(width * 0.14)
+	var wy := horizon + 6
+	for ty in range(wy, wy + 32):
+		if ty >= height:
+			continue
+		for tx in range(wx, wx + 6):
+			if tx < width:
+				image.set_pixel(tx, ty, Color(0.62, 0.48, 0.30))
+	for blade in 4:
+		var angle := float(blade) * 1.5708
+		for step in 14:
+			var px := wx + 3 + int(cos(angle) * float(step))
+			var py := wy + 6 + int(sin(angle) * float(step))
+			if px >= 0 and py >= 0 and px < width and py < height:
+				image.set_pixel(px, py, Color(0.86, 0.82, 0.74))
+	return image
+
+func create_tab_icon(tab_id: String) -> Image:
+	var image := Image.create(24, 24, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	match tab_id:
+		"market":
+			_rect(image, 5, 8, 14, 10, Color(0.82, 0.52, 0.22))
+			_rect(image, 7, 4, 10, 4, Color(0.62, 0.38, 0.16))
+			_px(image, 9, 10, Color(0.32, 0.72, 0.28))
+			_px(image, 12, 11, Color(0.92, 0.22, 0.18))
+			_px(image, 15, 10, Color(0.96, 0.78, 0.18))
+		"bots":
+			return create_robot_sprite()
+		"upgrades":
+			_disc(image, 12, 12, 8, Color(0.92, 0.76, 0.22))
+			_disc(image, 12, 12, 4, Color(0.72, 0.48, 0.10))
+			for i in 6:
+				var a := float(i) * 1.047
+				_px(image, 12 + int(cos(a) * 6.0), 12 + int(sin(a) * 6.0), Color(0.98, 0.92, 0.62))
+		"progress":
+			_rect(image, 5, 5, 14, 14, Color(0.92, 0.86, 0.72))
+			_rect(image, 8, 8, 8, 8, Color(0.32, 0.62, 0.34))
+			_px(image, 12, 10, Color(0.98, 0.92, 0.62))
+		"farm":
+			_vline(image, 12, 14, 22, Color(0.38, 0.62, 0.24))
+			_disc(image, 12, 10, 5, Color(0.42, 0.72, 0.32))
+			_disc(image, 10, 9, 2, Color(0.58, 0.86, 0.42))
+	_add_outline(image, OUTLINE)
+	return image
+
+func create_water_icon() -> Image:
+	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	_disc(image, 8, 10, 5, Color(0.28, 0.62, 0.96))
+	_disc(image, 7, 9, 2, Color(0.62, 0.86, 1.0))
+	_px(image, 8, 4, Color(0.42, 0.72, 0.98))
+	_px(image, 7, 5, Color(0.42, 0.72, 0.98))
+	_px(image, 9, 5, Color(0.42, 0.72, 0.98))
+	return image
+
+func create_energy_icon() -> Image:
+	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	_rect(image, 4, 5, 8, 9, Color(0.74, 0.80, 0.86))
+	_rect(image, 6, 7, 2, 2, Color(0.25, 0.95, 0.55))
+	_rect(image, 9, 7, 2, 2, Color(0.25, 0.95, 0.55))
+	_px(image, 8, 3, Color(0.95, 0.28, 0.28))
+	return image
+
+func _create_crop_stage_sprite(crop_type: String, color: Color, stage: int, max_stages: int) -> Image:
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var stem := Color(0.32, 0.58, 0.22)
+	var leaf := Color(0.42, 0.72, 0.30)
+	var t := float(stage + 1) / float(max_stages + 1)
+	if stage <= 0:
+		_vline(image, 15, 22, 28, stem)
+		_vline(image, 16, 22, 28, stem)
+		_disc(image, 16, 24, 2, leaf)
+		_px(image, 13, 23, leaf)
+		_px(image, 19, 23, leaf)
+	elif stage < max_stages - 1:
+		_vline(image, 15, 18, 29, stem)
+		_vline(image, 16, 18, 29, stem)
+		for i in 3:
+			_disc(image, 16, 16 - i * 3, 2 + i, leaf.darkened(0.05 * float(i)))
+		var mini := create_crop_sprite(crop_type, color)
+		var scale := 0.45 + t * 0.35
+		var offset := int(16.0 - 16.0 * scale)
+		var size := int(32.0 * scale)
+		for y in size:
+			for x in size:
+				var sx := int(float(x) / scale)
+				var sy := int(float(y) / scale)
+				if sx >= 32 or sy >= 32:
+					continue
+				var c := mini.get_pixel(sx, sy)
+				if c.a > 0.1:
+					_px(image, offset + x, offset + y - 2, c)
+	else:
+		return create_crop_sprite(crop_type, color)
+	_add_outline(image, OUTLINE)
 	return image
 
 func create_coin_icon() -> Image:

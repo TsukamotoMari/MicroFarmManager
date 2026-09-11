@@ -3,13 +3,25 @@
 [ext_resource type="Script" path="res://scripts/plot.gd" id="1_5k2j3"]
 
 [node name="Plot" type="Button"]
-custom_minimum_size = Vector2(54, 54)
-offset_right = 54.0
-offset_bottom = 54.0
+custom_minimum_size = Vector2(48, 48)
+offset_right = 48.0
+offset_bottom = 48.0
 flat = true
 script = ExtResource("1_5k2j3")
 
 [node name="Soil" type="TextureRect" parent="."]
+texture_filter = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="WaterOverlay" type="TextureRect" parent="."]
 texture_filter = 0
 layout_mode = 1
 anchors_preset = 15
@@ -47,6 +59,24 @@ offset_bottom = 14.0
 grow_horizontal = 2
 grow_vertical = 2
 pivot_offset = Vector2(16, 16)
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Robot" type="TextureRect" parent="."]
+texture_filter = 0
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -14.0
+offset_top = -22.0
+offset_right = 14.0
+offset_bottom = 10.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 expand_mode = 1
 stretch_mode = 5

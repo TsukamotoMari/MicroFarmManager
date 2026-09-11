@@ -8,10 +8,10 @@ const VERSION_URLS := [
 	"https://TsukamotoMari.github.io/MicroFarmManager/version.json",
 	"https://raw.githubusercontent.com/TsukamotoMari/MicroFarmManager/gh-pages/version.json"
 ]
-const REQUEST_HEADERS := PackedStringArray([
+const REQUEST_HEADERS: Array[String] = [
 	"Accept: application/json",
-	"User-Agent: MicroFarmManager/1.0 (Android)"
-])
+	"User-Agent: MicroFarmManager/1.0 (Android)",
+]
 
 var installer := UpdateInstaller.new()
 var remote: Dictionary = {}
@@ -61,7 +61,7 @@ func _request_next_version_url() -> void:
 		_checking = false
 		return
 	var cache_bust := "?t=%d" % Time.get_unix_time_from_system()
-	_version_check_http.request(VERSION_URLS[_version_check_index] + cache_bust, REQUEST_HEADERS)
+	_version_check_http.request(VERSION_URLS[_version_check_index] + cache_bust, PackedStringArray(REQUEST_HEADERS))
 
 func _try_next_version_url() -> void:
 	_version_check_index += 1
