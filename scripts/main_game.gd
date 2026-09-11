@@ -32,7 +32,13 @@ extends Control
 @onready var top_bar: PanelContainer = %TopBar
 @onready var gold_chip: PanelContainer = %GoldChip
 @onready var farm_panel: PanelContainer = %FarmPanel
+@onready var update_banner: PanelContainer = %UpdateBanner
+@onready var update_message: Label = %UpdateMessage
+@onready var update_button: Button = %UpdateButton
+@onready var version_label: Label = %VersionLabel
+@onready var version_request: HTTPRequest = %VersionRequest
 
+var app_update := AppUpdate.new()
 var plot_nodes = []
 var save_timer: float = 0.0
 var harvest_accumulator: float = 0.0
@@ -132,6 +138,13 @@ func _ready():
 	_check_offline_progress()
 	if not coin_rush_button.pressed.is_connected(_on_coin_rush_tap):
 		coin_rush_button.pressed.connect(_on_coin_rush_tap)
+	app_update.connect_installer_signals()
+	app_update.update_available.connect(_on_update_available)
+	app_update.status_changed.connect(_on_update_status_changed)
+	if not update_button.pressed.is_connected(_on_update_button_pressed):
+		update_button.pressed.connect(_on_update_button_pressed)
+	_update_version_label()
+	call_deferred("_check_for_app_update")
 	set_process(true)
 
 func _configure_touch_scroll():
@@ -148,6 +161,44 @@ func _apply_backdrop():
 	gold_chip.add_theme_stylebox_override("panel", FarmTheme.gold_chip_style())
 	farm_panel.add_theme_stylebox_override("panel", FarmTheme._panel(Color(0.98, 0.94, 0.84, 0.94), FarmTheme.WOOD, 14, 3, 8))
 	toast.add_theme_stylebox_override("normal", FarmTheme._panel(Color(0.22, 0.14, 0.08, 0.88), FarmTheme.GOLD_DEEP, 12, 2, 10))
+	update_banner.add_theme_stylebox_override("panel", FarmTheme._panel(Color(0.93, 0.86, 0.62), FarmTheme.GOLD_DEEP, 12, 2, 8))
+
+func _update_version_label():
+	version_label.text = "v%s · %d" % [
+		app_update.get_local_version_name(),
+		app_update.get_local_version_code()
+	]
+
+func _check_for_app_update():
+	app_update.check_for_update(version_request)
+
+func _on_update_available(_info: Dictionary):
+	_refresh_update_banner()
+
+func _on_update_status_changed(_message: String):
+	_refresh_update_banner()
+
+func _on_update_button_pressed():
+	app_update.install_update()
+	_refresh_update_banner()
+
+func _refresh_update_banner():
+	if not app_update.has_update():
+		update_banner.visible = false
+		return
+	update_banner.visible = true
+	var remote := app_update.remote
+	if app_update.message != "":
+		update_message.text = app_update.message
+	elif app_update.ready:
+		update_message.text = "Download finished. Tap Install now and confirm the Android screen."
+	else:
+		update_message.text = "Micro Farm %s (build %d) is ready. Download it, then install over this app to keep your save." % [
+			str(remote.get("version", "?")),
+			int(remote.get("versionCode", 0))
+		]
+	update_button.disabled = app_update.busy
+	update_button.text = "Downloading…" if app_update.busy else ("Install now" if app_update.ready else "Download update")
 
 func _process(delta):
 	game_data.play_time += delta

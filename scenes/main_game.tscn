@@ -41,6 +41,28 @@ theme_override_constants/margin_bottom = 12
 layout_mode = 2
 theme_override_constants/separation = 8
 
+[node name="UpdateBanner" type="PanelContainer" parent="SafeArea/Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="UpdateBox" type="VBoxContainer" parent="SafeArea/Layout/UpdateBanner"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="UpdateMessage" type="Label" parent="SafeArea/Layout/UpdateBanner/UpdateBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 13
+text = "A new version is ready."
+
+[node name="UpdateButton" type="Button" parent="SafeArea/Layout/UpdateBanner/UpdateBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Download update"
+
 [node name="TopBar" type="PanelContainer" parent="SafeArea/Layout"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -58,6 +80,13 @@ theme_override_constants/separation = 0
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Micro Farm"
+
+[node name="VersionLabel" type="Label" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.52, 0.42, 0.32, 1)
+theme_override_font_sizes/font_size = 11
+text = "v1.0.3 · 4"
 
 [node name="SubtitleLabel" type="Label" parent="SafeArea/Layout/TopBar/TopRow/TitleBlock"]
 unique_name_in_owner = true
@@ -286,3 +315,6 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 text = "Tap!  0/5"
+
+[node name="VersionRequest" type="HTTPRequest" parent="."]
+unique_name_in_owner = true
