@@ -23,6 +23,7 @@ extends Control
 @onready var bots_tab: Button = %BotsTab
 @onready var upgrades_tab: Button = %UpgradesTab
 @onready var progress_tab: Button = %ProgressTab
+@onready var progress_box: VBoxContainer = %ProgressBox
 @onready var toast: Label = %Toast
 @onready var offline_popup: AcceptDialog = %OfflinePopup
 @onready var coin_rush_popup: AcceptDialog = %CoinRushPopup
@@ -79,6 +80,7 @@ var art := PixelArtGenerator.new()
 var active_robot_plot: Vector2i = Vector2i(-1, -1)
 var robot_plot_timer: float = 0.0
 var _crop_chip_touch: Dictionary = {}
+var _check_update_button: Button
 
 const ROBOT_WARMUP_SECONDS := 6.0
 const COIN_RUSH_COOLDOWN := 90.0
@@ -172,8 +174,10 @@ func _ready():
 		save_vault.read_finished.connect(_on_cloud_save_read)
 	app_update.update_available.connect(_on_update_available)
 	app_update.status_changed.connect(_on_update_status_changed)
+	app_update.check_finished.connect(_on_update_check_finished)
 	if not update_button.pressed.is_connected(_on_update_button_pressed):
 		update_button.pressed.connect(_on_update_button_pressed)
+	version_request.timeout = 20.0
 	_update_version_label()
 	get_tree().create_timer(UPDATE_CHECK_DELAY).timeout.connect(_check_for_app_update)
 	call_deferred("_restore_cloud_save")
@@ -244,19 +248,32 @@ func _apply_backdrop():
 	_apply_pixel_label_colors()
 
 func _update_version_label():
-	version_label.text = "v%s · %d" % [
-		app_update.get_local_version_name(),
-		app_update.get_local_version_code()
-	]
+	if app_update == null:
+		return
+	version_label.text = "v" + app_update.get_local_version_name() + " · " + str(app_update.get_local_version_code())
 
 func _check_for_app_update():
+	if app_update == null:
+		return
 	app_update.check_for_update(version_request)
+
+func _on_check_update_pressed():
+	if app_update == null:
+		return
+	app_update.reset_and_check(version_request)
+	_show_toast("Checking for updates…")
 
 func _on_update_available(_info: Dictionary):
 	_refresh_update_banner()
 
 func _on_update_status_changed(_message: String):
 	_refresh_update_banner()
+
+func _on_update_check_finished(found: bool, error: String) -> void:
+	if found:
+		_refresh_update_banner()
+	elif not error.is_empty() and not app_update.has_update():
+		_show_toast(error)
 
 func _on_update_button_pressed():
 	app_update.install_update()
@@ -395,6 +412,7 @@ func _setup_ui():
 	_setup_upgrades_panel()
 	_refresh_inventory_panel()
 	_setup_prestige_panel()
+	_setup_check_update_button()
 	_setup_achievements_panel()
 	
 	if not market_tab.pressed.is_connected(_on_market_tab):
@@ -452,7 +470,10 @@ func _update_gold_display():
 	var crop_data = game_data.crops.get(game_data.selected_crop, {})
 	var tier := int(crop_data.get("tier", 1))
 	var grow := int(crop_data.get("growth_time", 0))
-	subtitle_label.text = "T" + str(tier) + " " + str(crop_data.get("name", "Wheat")) + " · " + str(grow) + "s · " + str(game_data.unlocked_plot_count()) + "/" + str(game_data.total_plot_count()) + " plots · v" + app_update.get_local_version_name()
+	var version_suffix := ""
+	if app_update != null:
+		version_suffix = " · v" + app_update.get_local_version_name() + " · " + str(app_update.get_local_version_code())
+	subtitle_label.text = "T" + str(tier) + " " + str(crop_data.get("name", "Wheat")) + " · " + str(grow) + "s · " + str(game_data.unlocked_plot_count()) + "/" + str(game_data.total_plot_count()) + " plots" + version_suffix
 	var xp_into := game_data.farmer_xp_into_level()
 	level_label.text = "Next Level " + str(xp_into) + " / " + str(GameData.FARMER_XP_PER_LEVEL)
 	level_bar.max_value = float(GameData.FARMER_XP_PER_LEVEL)
@@ -949,6 +970,17 @@ func _setup_prestige_panel():
 	if game_data.can_prestige():
 		text += "\nPrestige is ready."
 	prestige_info.text = text
+
+func _setup_check_update_button() -> void:
+	if _check_update_button != null and is_instance_valid(_check_update_button):
+		return
+	_check_update_button = Button.new()
+	_check_update_button.custom_minimum_size = Vector2(0, 40)
+	_check_update_button.text = "Check for updates"
+	_check_update_button.pressed.connect(_on_check_update_pressed)
+	var insert_at := prestige_button.get_index() + 1
+	progress_box.add_child(_check_update_button)
+	progress_box.move_child(_check_update_button, insert_at)
 
 func _setup_achievements_panel():
 	_clear_children(achievement_list)

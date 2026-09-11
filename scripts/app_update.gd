@@ -3,15 +3,18 @@ class_name AppUpdate
 
 signal update_available(info: Dictionary)
 signal status_changed(message: String)
+signal check_finished(found: bool, error: String)
 
 const VERSION_URLS := [
+	"https://raw.githubusercontent.com/TsukamotoMari/MicroFarmManager/gh-pages/version.json",
 	"https://TsukamotoMari.github.io/MicroFarmManager/version.json",
-	"https://raw.githubusercontent.com/TsukamotoMari/MicroFarmManager/gh-pages/version.json"
 ]
 const REQUEST_HEADERS: Array[String] = [
 	"Accept: application/json",
+	"Cache-Control: no-cache",
 	"User-Agent: MicroFarmManager/1.0 (Android)",
 ]
+const CHECK_TIMEOUT_SECONDS := 20.0
 
 var installer := UpdateInstaller.new()
 var remote: Dictionary = {}
@@ -21,6 +24,7 @@ var message: String = ""
 var _version_check_index := 0
 var _version_check_http: HTTPRequest
 var _checking := false
+var _check_timeout: SceneTreeTimer
 
 func get_local_version_code() -> int:
 	return installer.get_local_version_code()
@@ -32,14 +36,29 @@ func has_update() -> bool:
 	return not remote.is_empty()
 
 func check_for_update(http: HTTPRequest) -> void:
-	if OS.get_name() != "Android" or _checking or has_update():
+	if OS.get_name() != "Android":
+		check_finished.emit(false, "Updates only work in the Android app.")
+		return
+	if _checking:
+		return
+	if has_update():
+		update_available.emit(remote)
+		check_finished.emit(true, "")
 		return
 	if not http.request_completed.is_connected(_on_version_response):
 		http.request_completed.connect(_on_version_response)
 	_version_check_index = 0
 	_version_check_http = http
 	_checking = true
+	_start_check_timeout(http)
 	_request_next_version_url()
+
+func reset_and_check(http: HTTPRequest) -> void:
+	_cancel_check_timeout()
+	if _version_check_http != null and _version_check_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		_version_check_http.cancel_request()
+	_checking = false
+	check_for_update(http)
 
 func install_update() -> void:
 	if remote.is_empty() or busy:
@@ -56,16 +75,50 @@ func install_update() -> void:
 		int(remote.get("versionCode", 0))
 	)
 
+func _start_check_timeout(http: HTTPRequest) -> void:
+	_cancel_check_timeout()
+	if http == null or http.get_tree() == null:
+		return
+	_check_timeout = http.get_tree().create_timer(CHECK_TIMEOUT_SECONDS)
+	_check_timeout.timeout.connect(_on_check_timeout)
+
+func _cancel_check_timeout() -> void:
+	if _check_timeout != null and _check_timeout.timeout.is_connected(_on_check_timeout):
+		_check_timeout.timeout.disconnect(_on_check_timeout)
+	_check_timeout = null
+
+func _on_check_timeout() -> void:
+	if not _checking:
+		return
+	_checking = false
+	if _version_check_http != null:
+		_version_check_http.cancel_request()
+	var err := "Could not reach the update server. Check your connection and try again."
+	status_changed.emit(err)
+	check_finished.emit(false, err)
+
 func _request_next_version_url() -> void:
 	if _version_check_http == null or _version_check_index >= VERSION_URLS.size():
-		_checking = false
+		_finish_check(false, "Could not reach the update server. Check your connection and try again.")
 		return
 	var cache_bust := "?t=%d" % Time.get_unix_time_from_system()
-	_version_check_http.request(VERSION_URLS[_version_check_index] + cache_bust, PackedStringArray(REQUEST_HEADERS))
+	var err := _version_check_http.request(
+		VERSION_URLS[_version_check_index] + cache_bust,
+		PackedStringArray(REQUEST_HEADERS)
+	)
+	if err != OK:
+		_try_next_version_url()
 
 func _try_next_version_url() -> void:
 	_version_check_index += 1
 	_request_next_version_url()
+
+func _finish_check(found: bool, error: String = "") -> void:
+	_checking = false
+	_cancel_check_timeout()
+	check_finished.emit(found, error)
+	if not error.is_empty():
+		status_changed.emit(error)
 
 func _is_remote_newer(data: Dictionary) -> bool:
 	var remote_code := int(data.get("versionCode", 0))
@@ -99,10 +152,10 @@ func _on_version_response(result: int, response_code: int, _headers: PackedStrin
 		return
 	var data: Dictionary = parsed
 	if not _is_remote_newer(data):
-		_checking = false
+		_finish_check(false, "")
 		return
 	remote = data
-	_checking = false
+	_finish_check(true, "")
 	update_available.emit(remote)
 
 func _on_download_finished(ok: bool, error: String) -> void:
