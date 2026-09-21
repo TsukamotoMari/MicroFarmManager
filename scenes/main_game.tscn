@@ -116,25 +116,31 @@ show_percentage = false
 
 [node name="GoldChip" type="PanelContainer" parent="SafeArea/Layout/TopBar/TopRow"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 40)
 layout_mode = 2
+size_flags_vertical = 4
 
 [node name="GoldRow" type="HBoxContainer" parent="SafeArea/Layout/TopBar/TopRow/GoldChip"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
+alignment = 1
 
 [node name="CoinIcon" type="TextureRect" parent="SafeArea/Layout/TopBar/TopRow/GoldChip/GoldRow"]
 unique_name_in_owner = true
 texture_filter = 0
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
+size_flags_vertical = 4
 expand_mode = 1
 stretch_mode = 5
 
 [node name="GoldLabel" type="Label" parent="SafeArea/Layout/TopBar/TopRow/GoldChip/GoldRow"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.32, 0.18, 0.06, 1)
-theme_override_font_sizes/font_size = 20
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.98, 0.88, 0.42, 1)
+theme_override_font_sizes/font_size = 18
+vertical_alignment = 1
 text = "50"
 
 [node name="FarmPanel" type="PanelContainer" parent="SafeArea/Layout"]

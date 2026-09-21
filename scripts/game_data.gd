@@ -27,7 +27,9 @@ var grid_size: Vector2i = Vector2i(6, 8)  # 6x8 grid for mobile
 const CROP_ORDER: Array[String] = [
 	"wheat", "cabbage", "potato", "carrot", "onion",
 	"strawberry", "tomato", "pepper", "sunflower", "corn",
-	"grape", "apple", "pumpkin", "watermelon", "coffee"
+	"grape", "apple", "pumpkin", "watermelon", "coffee",
+	"blueberry", "peach", "cherry", "cocoa", "avocado",
+	"truffle", "saffron"
 ]
 
 var crops: Dictionary = {
@@ -195,6 +197,83 @@ var crops: Dictionary = {
 		"unlock_cost": 26000,
 		"color": Color(0.45, 0.22, 0.10),
 		"stages": 7
+	},
+	"blueberry": {
+		"name": "Blueberry",
+		"tier": 16,
+		"growth_time": 440.0,
+		"sell_price": 14000,
+		"cost": 6800,
+		"unlock_harvest": 42,
+		"unlock_cost": 40000,
+		"color": Color(0.28, 0.32, 0.78),
+		"stages": 6
+	},
+	"peach": {
+		"name": "Peach",
+		"tier": 17,
+		"growth_time": 520.0,
+		"sell_price": 21000,
+		"cost": 9800,
+		"unlock_harvest": 45,
+		"unlock_cost": 62000,
+		"color": Color(1.0, 0.62, 0.42),
+		"stages": 7
+	},
+	"cherry": {
+		"name": "Cherry",
+		"tier": 18,
+		"growth_time": 600.0,
+		"sell_price": 32000,
+		"cost": 15000,
+		"unlock_harvest": 48,
+		"unlock_cost": 95000,
+		"color": Color(0.78, 0.08, 0.18),
+		"stages": 6
+	},
+	"cocoa": {
+		"name": "Cocoa",
+		"tier": 19,
+		"growth_time": 700.0,
+		"sell_price": 48000,
+		"cost": 22000,
+		"unlock_harvest": 50,
+		"unlock_cost": 145000,
+		"color": Color(0.42, 0.22, 0.12),
+		"stages": 7
+	},
+	"avocado": {
+		"name": "Avocado",
+		"tier": 20,
+		"growth_time": 820.0,
+		"sell_price": 72000,
+		"cost": 34000,
+		"unlock_harvest": 52,
+		"unlock_cost": 220000,
+		"color": Color(0.28, 0.52, 0.22),
+		"stages": 7
+	},
+	"truffle": {
+		"name": "Truffle",
+		"tier": 21,
+		"growth_time": 960.0,
+		"sell_price": 110000,
+		"cost": 52000,
+		"unlock_harvest": 55,
+		"unlock_cost": 340000,
+		"color": Color(0.28, 0.22, 0.18),
+		"stages": 5
+	},
+	"saffron": {
+		"name": "Saffron",
+		"tier": 22,
+		"growth_time": 1120.0,
+		"sell_price": 165000,
+		"cost": 78000,
+		"unlock_harvest": 58,
+		"unlock_cost": 520000,
+		"color": Color(0.92, 0.42, 0.12),
+		"stages": 6
 	}
 }
 
@@ -319,6 +398,70 @@ var products: Dictionary = {
 		"process_time": 100.0,
 		"sell_price": 32000,
 		"color": Color(0.32, 0.18, 0.10)
+	},
+	"bread": {
+		"name": "Bread",
+		"input_crop": "wheat",
+		"input_amount": 4,
+		"process_time": 18.0,
+		"sell_price": 55,
+		"color": Color(0.86, 0.68, 0.38)
+	},
+	"blueberry_muffin": {
+		"name": "Blueberry Muffin",
+		"input_crop": "blueberry",
+		"input_amount": 2,
+		"process_time": 110.0,
+		"sell_price": 48000,
+		"color": Color(0.42, 0.38, 0.82)
+	},
+	"peach_preserve": {
+		"name": "Peach Preserve",
+		"input_crop": "peach",
+		"input_amount": 2,
+		"process_time": 120.0,
+		"sell_price": 72000,
+		"color": Color(1.0, 0.55, 0.32)
+	},
+	"cherry_syrup": {
+		"name": "Cherry Syrup",
+		"input_crop": "cherry",
+		"input_amount": 2,
+		"process_time": 130.0,
+		"sell_price": 110000,
+		"color": Color(0.72, 0.08, 0.22)
+	},
+	"chocolate": {
+		"name": "Chocolate",
+		"input_crop": "cocoa",
+		"input_amount": 2,
+		"process_time": 140.0,
+		"sell_price": 165000,
+		"color": Color(0.32, 0.16, 0.08)
+	},
+	"guacamole": {
+		"name": "Guacamole",
+		"input_crop": "avocado",
+		"input_amount": 2,
+		"process_time": 150.0,
+		"sell_price": 250000,
+		"color": Color(0.42, 0.68, 0.28)
+	},
+	"truffle_oil": {
+		"name": "Truffle Oil",
+		"input_crop": "truffle",
+		"input_amount": 1,
+		"process_time": 160.0,
+		"sell_price": 280000,
+		"color": Color(0.36, 0.30, 0.18)
+	},
+	"saffron_tea": {
+		"name": "Saffron Tea",
+		"input_crop": "saffron",
+		"input_amount": 2,
+		"process_time": 180.0,
+		"sell_price": 580000,
+		"color": Color(0.96, 0.62, 0.18)
 	}
 }
 
@@ -359,6 +502,8 @@ var robots: Dictionary = {
 }
 
 const ROBOT_MAX_LEVEL: int = 20
+const OFFLINE_MAX_SECONDS: int = 8 * 60 * 60
+const OFFLINE_MIN_SECONDS: int = 60
 
 func get_robot_level(robot: Dictionary) -> int:
 	var level := int(robot.get("level", 0))
@@ -574,6 +719,13 @@ var crop_harvests: Dictionary = {}  # crop_type -> lifetime harvests this presti
 var last_save_time: int = 0
 var offline_earnings: float = 0.0
 
+# Daily retention
+var login_streak: int = 0
+var last_login_day: int = 0
+var daily_reward_claimed: bool = false
+var daily_goal_day: int = 0
+var daily_goals: Dictionary = {}
+
 # Selected crop for planting
 var selected_crop: String = "wheat"
 
@@ -775,6 +927,7 @@ func harvest_crop(grid_pos: Vector2i) -> bool:
 	crop_harvests[crop_type] = int(crop_harvests.get(crop_type, 0)) + 1
 	total_harvested += 1
 	farmer_xp += 1
+	_bump_daily_goal("harvest", 1)
 	
 	plot.crop_type = null
 	plot.planted_time = 0.0
@@ -801,6 +954,7 @@ func process_product(product_type: String, amount: int = 1) -> bool:
 	
 	crop_inventory[input_crop] -= product_data.input_amount * amount
 	product_inventory[product_type] += amount
+	_bump_daily_goal("craft", amount)
 	return true
 
 func sell_crop(crop_type: String, amount: int = 1) -> bool:
@@ -813,6 +967,7 @@ func sell_crop(crop_type: String, amount: int = 1) -> bool:
 	crop_inventory[crop_type] -= amount
 	gold += earnings
 	total_gold_earned += earnings
+	_bump_daily_goal("sell", int(round(earnings)))
 	return true
 
 func sell_product(product_type: String, amount: int = 1) -> bool:
@@ -825,6 +980,7 @@ func sell_product(product_type: String, amount: int = 1) -> bool:
 	product_inventory[product_type] -= amount
 	gold += earnings
 	total_gold_earned += earnings
+	_bump_daily_goal("sell", int(round(earnings)))
 	return true
 
 func calculate_prestige_currency() -> int:
@@ -910,8 +1066,155 @@ func normalize_crops():
 			crop_harvests[crop_id] = 0
 		if not crop_inventory.has(crop_id):
 			crop_inventory[crop_id] = 0
+	for product_id in products:
+		if not product_inventory.has(product_id):
+			product_inventory[product_id] = 0
 	if not is_crop_unlocked(selected_crop):
 		selected_crop = "wheat"
+	ensure_daily_state()
+
+func today_key() -> int:
+	var dt := Time.get_datetime_dict_from_system()
+	return int(dt.year) * 10000 + int(dt.month) * 100 + int(dt.day)
+
+func ensure_daily_state() -> void:
+	var today := today_key()
+	if daily_goal_day != today:
+		daily_goal_day = today
+		daily_goals = _fresh_daily_goals()
+	elif daily_goals.is_empty():
+		daily_goals = _fresh_daily_goals()
+	else:
+		_sync_daily_goal_balance()
+	if last_login_day != today:
+		daily_reward_claimed = false
+
+func _sync_daily_goal_balance() -> void:
+	# Keep progress/claimed, but always use current targets and rewards.
+	var fresh := _fresh_daily_goals()
+	for goal_id in fresh.keys():
+		var template: Dictionary = fresh[goal_id]
+		if not daily_goals.has(goal_id):
+			daily_goals[goal_id] = template.duplicate(true)
+			continue
+		var goal: Dictionary = daily_goals[goal_id]
+		goal.name = template.name
+		goal.description = template.description
+		goal.target = int(template.target)
+		goal.reward = int(template.reward)
+		goal.progress = mini(int(goal.get("progress", 0)), int(goal.target))
+		if not goal.has("claimed"):
+			goal.claimed = false
+		daily_goals[goal_id] = goal
+
+func _fresh_daily_goals() -> Dictionary:
+	return {
+		"harvest": {
+			"name": "Harvest crops",
+			"description": "Harvest 75 crops today",
+			"target": 75,
+			"progress": 0,
+			"reward": 400,
+			"claimed": false
+		},
+		"sell": {
+			"name": "Earn gold",
+			"description": "Earn 5,000g from sales today",
+			"target": 5000,
+			"progress": 0,
+			"reward": 750,
+			"claimed": false
+		},
+		"craft": {
+			"name": "Craft products",
+			"description": "Make 20 market products today",
+			"target": 20,
+			"progress": 0,
+			"reward": 600,
+			"claimed": false
+		}
+	}
+
+func _bump_daily_goal(goal_id: String, amount: int) -> void:
+	ensure_daily_state()
+	if not daily_goals.has(goal_id):
+		return
+	var goal: Dictionary = daily_goals[goal_id]
+	if bool(goal.get("claimed", false)):
+		return
+	goal.progress = mini(int(goal.get("target", 1)), int(goal.get("progress", 0)) + amount)
+	daily_goals[goal_id] = goal
+
+func daily_streak_reward(streak: int) -> int:
+	# Escalating week: meaningful early boost, strong day-7 payout.
+	match clampi(streak, 1, 7):
+		1:
+			return 150
+		2:
+			return 300
+		3:
+			return 500
+		4:
+			return 800
+		5:
+			return 1200
+		6:
+			return 1800
+		_:
+			return 3500
+
+func can_claim_daily_reward() -> bool:
+	ensure_daily_state()
+	return not daily_reward_claimed
+
+func claim_daily_reward() -> Dictionary:
+	ensure_daily_state()
+	if daily_reward_claimed:
+		return {"ok": false, "gold": 0, "streak": login_streak}
+	var today := today_key()
+	login_streak = preview_daily_streak()
+	last_login_day = today
+	daily_reward_claimed = true
+	var reward := daily_streak_reward(login_streak)
+	gold += float(reward)
+	total_gold_earned += float(reward)
+	return {"ok": true, "gold": reward, "streak": login_streak}
+
+func preview_daily_streak() -> int:
+	ensure_daily_state()
+	if daily_reward_claimed:
+		return maxi(1, login_streak)
+	var today := today_key()
+	if last_login_day == 0:
+		return 1
+	if last_login_day == today:
+		return maxi(1, login_streak)
+	if last_login_day == _yesterday_key():
+		return mini(7, maxi(1, login_streak) + 1)
+	return 1
+
+func _yesterday_key(_today: int = 0) -> int:
+	var unix := Time.get_unix_time_from_system() - 86400
+	var dt := Time.get_datetime_dict_from_unix_time(int(unix))
+	return int(dt.year) * 10000 + int(dt.month) * 100 + int(dt.day)
+
+func can_claim_daily_goal(goal_id: String) -> bool:
+	ensure_daily_state()
+	if not daily_goals.has(goal_id):
+		return false
+	var goal: Dictionary = daily_goals[goal_id]
+	return not bool(goal.get("claimed", false)) and int(goal.get("progress", 0)) >= int(goal.get("target", 1))
+
+func claim_daily_goal(goal_id: String) -> Dictionary:
+	if not can_claim_daily_goal(goal_id):
+		return {"ok": false, "gold": 0}
+	var goal: Dictionary = daily_goals[goal_id]
+	var reward := int(goal.get("reward", 0))
+	goal.claimed = true
+	daily_goals[goal_id] = goal
+	gold += float(reward)
+	total_gold_earned += float(reward)
+	return {"ok": true, "gold": reward, "name": str(goal.get("name", "Goal"))}
 
 func update_unlocked_crops() -> bool:
 	normalize_crops()
@@ -953,36 +1256,58 @@ func do_prestige() -> Dictionary:
 	}
 
 func calculate_offline_progress() -> Dictionary:
-	var current_time = Time.get_unix_time_from_system()
-	var offline_seconds = current_time - last_save_time
-	
-	if offline_seconds <= 0:
-		return {"gold_earned": 0.0, "crops_harvested": 0}
-	
-	# Simple offline calculation based on auto-harvest bots
+	var current_time := int(Time.get_unix_time_from_system())
+	var raw_seconds := current_time - int(last_save_time)
+	if raw_seconds < OFFLINE_MIN_SECONDS:
+		return {
+			"gold_earned": 0.0,
+			"crops_harvested": 0,
+			"crops_kept": 0,
+			"offline_seconds": 0,
+			"capped": false
+		}
+
+	var offline_seconds := mini(raw_seconds, OFFLINE_MAX_SECONDS)
+	var capped := raw_seconds > OFFLINE_MAX_SECONDS
 	var harvest_bot = robots.get("harvester")
-	var auto_harvest_rate = 0.0
-	
+	var seller_bot = robots.get("seller")
+	var crops_harvested := 0
+	var gold_earned := 0.0
+	var crops_kept := 0
+
 	if harvest_bot and harvest_bot.owned:
-		auto_harvest_rate = robot_work_speed("harvester") * float(robot_batch_size("harvester")) * prestige_multipliers.robot_speed * get_robot_efficiency_effect(permanent_upgrades.robot_efficiency.current_level)
-	
-	var crops_harvested = int(floor(auto_harvest_rate * offline_seconds))
-	var gold_earned = 0.0
-	
+		var unlocked := unlocked_plot_count()
+		var growth_time := float(crops["wheat"].growth_time) / maxf(0.25, get_total_growth_multiplier())
+		var max_by_plots := int(floor(float(unlocked) * float(offline_seconds) / maxf(1.0, growth_time)))
+		var rate := robot_work_speed("harvester") \
+			* float(robot_batch_size("harvester")) \
+			* float(prestige_multipliers.robot_speed) \
+			* get_robot_efficiency_effect(permanent_upgrades.robot_efficiency.current_level)
+		crops_harvested = mini(int(floor(rate * float(offline_seconds))), max_by_plots)
+
 	if crops_harvested > 0:
-		# Assume wheat for offline calculation
 		var wheat_data = crops["wheat"]
-		var multiplier = prestige_multipliers.gold_multiplier * get_gold_boost_effect(permanent_upgrades.gold_boost.current_level)
-		gold_earned = wheat_data.sell_price * crops_harvested * multiplier
-		crop_inventory["wheat"] += crops_harvested
+		var sell_mult := float(prestige_multipliers.gold_multiplier) \
+			* get_gold_boost_effect(permanent_upgrades.gold_boost.current_level)
+		var unit_value := float(wheat_data.sell_price) * sell_mult
+		if seller_bot and seller_bot.owned:
+			gold_earned = unit_value * float(crops_harvested)
+			gold += gold_earned
+			total_gold_earned += gold_earned
+		else:
+			crop_inventory["wheat"] = int(crop_inventory.get("wheat", 0)) + crops_harvested
+			crops_kept = crops_harvested
 		crop_harvests["wheat"] = int(crop_harvests.get("wheat", 0)) + crops_harvested
 		total_harvested += crops_harvested
-		total_gold_earned += gold_earned
-	
+		farmer_xp += crops_harvested
+
 	offline_earnings = gold_earned
-	
+	last_save_time = current_time
+
 	return {
 		"gold_earned": gold_earned,
 		"crops_harvested": crops_harvested,
-		"offline_seconds": offline_seconds
+		"crops_kept": crops_kept,
+		"offline_seconds": offline_seconds,
+		"capped": capped
 	}

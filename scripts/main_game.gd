@@ -81,6 +81,11 @@ var active_robot_plot: Vector2i = Vector2i(-1, -1)
 var robot_plot_timer: float = 0.0
 var _crop_chip_touch: Dictionary = {}
 var _check_update_button: Button
+var _daily_section: VBoxContainer
+var _daily_claim_button: Button
+var _daily_info_label: Label
+var _goals_list: VBoxContainer
+var _goal_buttons: Dictionary = {}
 
 const ROBOT_WARMUP_SECONDS := 6.0
 const COIN_RUSH_COOLDOWN := 90.0
@@ -152,6 +157,20 @@ var achievements: Dictionary = {
 		"unlocked": false,
 		"requirement_type": "prestige_level",
 		"requirement_value": 5
+	},
+	"crop_collector": {
+		"name": "Crop Collector",
+		"description": "Unlock 15 different crops",
+		"unlocked": false,
+		"requirement_type": "crops_unlocked",
+		"requirement_value": 15
+	},
+	"luxury_farmer": {
+		"name": "Luxury Farmer",
+		"description": "Unlock every crop through Saffron",
+		"unlocked": false,
+		"requirement_type": "crops_unlocked",
+		"requirement_value": 22
 	}
 }
 
@@ -167,6 +186,7 @@ func _ready():
 	_setup_ui()
 	_show_tab("market")
 	_check_offline_progress()
+	_prompt_daily_reward()
 	if not coin_rush_button.pressed.is_connected(_on_coin_rush_tap):
 		coin_rush_button.pressed.connect(_on_coin_rush_tap)
 	save_vault = SaveVault.new()
@@ -225,14 +245,21 @@ func _resize_farm_panel() -> void:
 			frame.patch_margin_bottom = FARM_FRAME_PAD
 
 func _apply_backdrop():
+	SpriteBank.reset()
 	FarmTheme.reset_textures()
 	background.texture = ImageTexture.create_from_image(art.create_background(480, 854))
 	background.texture_filter = TEXTURE_FILTER_NEAREST
 	coin_icon.texture = ImageTexture.create_from_image(art.create_coin_icon())
+	coin_icon.texture_filter = TEXTURE_FILTER_NEAREST
+	coin_icon.custom_minimum_size = Vector2(22, 22)
+	coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	water_icon.texture = ImageTexture.create_from_image(art.create_water_icon())
 	energy_icon.texture = ImageTexture.create_from_image(art.create_energy_icon())
 	top_bar.add_theme_stylebox_override("panel", FarmTheme.top_bar_style())
 	gold_chip.add_theme_stylebox_override("panel", FarmTheme.gold_chip_style())
+	gold_label.add_theme_color_override("font_color", Color(0.98, 0.88, 0.42))
+	gold_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	farm_panel.add_theme_stylebox_override("panel", FarmTheme.transparent_panel())
 	content_panel.add_theme_stylebox_override("panel", FarmTheme.wood_panel(10))
 	resource_bars.add_theme_stylebox_override("panel", FarmTheme.resource_panel_style())
@@ -411,6 +438,7 @@ func _setup_ui():
 	_setup_robot_panel()
 	_setup_upgrades_panel()
 	_refresh_inventory_panel()
+	_setup_daily_panel()
 	_setup_prestige_panel()
 	_setup_check_update_button()
 	_setup_achievements_panel()
@@ -433,6 +461,7 @@ func _on_upgrades_tab():
 
 func _on_progress_tab():
 	_show_tab("progress")
+	_refresh_daily_panel()
 
 func _show_tab(tab_name: String):
 	current_tab = tab_name
@@ -444,6 +473,8 @@ func _show_tab(tab_name: String):
 	_style_tab(bots_tab, tab_name == "bots")
 	_style_tab(upgrades_tab, tab_name == "upgrades")
 	_style_tab(progress_tab, tab_name == "progress")
+	if tab_name == "progress":
+		_refresh_daily_panel()
 
 func _style_tab(button: Button, active: bool):
 	var style := FarmTheme.tab_style(active)
@@ -961,6 +992,116 @@ func _on_coin_rush_tap():
 func _inventory_signature() -> String:
 	return str(game_data.crop_inventory) + str(game_data.product_inventory)
 
+func _setup_daily_panel() -> void:
+	game_data.ensure_daily_state()
+	if _daily_section == null or not is_instance_valid(_daily_section):
+		_daily_section = VBoxContainer.new()
+		_daily_section.add_theme_constant_override("separation", 6)
+		progress_box.add_child(_daily_section)
+		progress_box.move_child(_daily_section, 0)
+		var title := Label.new()
+		title.text = "Daily"
+		title.add_theme_font_size_override("font_size", 16)
+		title.add_theme_color_override("font_color", FarmTheme.GOLD)
+		_daily_section.add_child(title)
+		_daily_info_label = Label.new()
+		_daily_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_daily_info_label.add_theme_font_size_override("font_size", 12)
+		_daily_info_label.add_theme_color_override("font_color", FarmTheme.CREAM_MUTED)
+		_daily_section.add_child(_daily_info_label)
+		_daily_claim_button = Button.new()
+		_daily_claim_button.custom_minimum_size = Vector2(0, 40)
+		_daily_claim_button.pressed.connect(_on_claim_daily_reward)
+		_daily_section.add_child(_daily_claim_button)
+		var goals_title := Label.new()
+		goals_title.text = "Today's Goals"
+		goals_title.add_theme_font_size_override("font_size", 14)
+		goals_title.add_theme_color_override("font_color", FarmTheme.CREAM)
+		_daily_section.add_child(goals_title)
+		_goals_list = VBoxContainer.new()
+		_goals_list.add_theme_constant_override("separation", 6)
+		_daily_section.add_child(_goals_list)
+	_refresh_daily_panel()
+
+func _refresh_daily_panel() -> void:
+	if _daily_section == null or not is_instance_valid(_daily_section):
+		return
+	game_data.ensure_daily_state()
+	var preview_streak := game_data.preview_daily_streak()
+	var next_reward := game_data.daily_streak_reward(preview_streak)
+	_daily_info_label.text = "Login streak: Day " + str(preview_streak) + " / 7  ·  Best daily bonuses stack up to day 7."
+	if game_data.can_claim_daily_reward():
+		_daily_claim_button.disabled = false
+		_daily_claim_button.text = "Claim daily  +" + str(next_reward) + "g"
+	else:
+		_daily_claim_button.disabled = true
+		_daily_claim_button.text = "Daily claimed  ·  Day " + str(maxi(1, game_data.login_streak)) + "/7"
+	_clear_children(_goals_list)
+	_goal_buttons.clear()
+	for goal_id in ["harvest", "sell", "craft"]:
+		if not game_data.daily_goals.has(goal_id):
+			continue
+		var goal: Dictionary = game_data.daily_goals[goal_id]
+		var card := PanelContainer.new()
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
+		card.add_theme_stylebox_override("panel", FarmTheme.row_style())
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var title := Label.new()
+		title.text = str(goal.get("name", "Goal"))
+		title.add_theme_font_size_override("font_size", 14)
+		var progress := Label.new()
+		progress.text = str(goal.get("description", "")) + "\n" + str(int(goal.get("progress", 0))) + " / " + str(int(goal.get("target", 1)))
+		progress.add_theme_font_size_override("font_size", 11)
+		progress.add_theme_color_override("font_color", FarmTheme.MUTED)
+		progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(title)
+		info.add_child(progress)
+		var action := Button.new()
+		action.custom_minimum_size = Vector2(88, 36)
+		if bool(goal.get("claimed", false)):
+			action.text = "Done"
+			action.disabled = true
+		elif game_data.can_claim_daily_goal(goal_id):
+			action.text = "+" + str(int(goal.get("reward", 0))) + "g"
+			action.disabled = false
+			action.pressed.connect(_on_claim_daily_goal.bind(goal_id))
+		else:
+			action.text = str(int(goal.get("reward", 0))) + "g"
+			action.disabled = true
+		row.add_child(info)
+		row.add_child(action)
+		card.add_child(row)
+		_goals_list.add_child(card)
+		_goal_buttons[goal_id] = action
+
+func _on_claim_daily_reward() -> void:
+	var result := game_data.claim_daily_reward()
+	if not bool(result.get("ok", false)):
+		_show_toast("Already claimed today")
+		return
+	_show_toast("Day " + str(int(result.get("streak", 1))) + " reward: +" + str(int(result.get("gold", 0))) + "g")
+	_update_gold_display()
+	_refresh_daily_panel()
+	_save_game()
+
+func _on_claim_daily_goal(goal_id: String) -> void:
+	var result := game_data.claim_daily_goal(goal_id)
+	if not bool(result.get("ok", false)):
+		_show_toast("Goal not ready")
+		return
+	_show_toast(str(result.get("name", "Goal")) + " +" + str(int(result.get("gold", 0))) + "g")
+	_update_gold_display()
+	_refresh_daily_panel()
+	_save_game()
+
+func _prompt_daily_reward() -> void:
+	game_data.ensure_daily_state()
+	if game_data.can_claim_daily_reward():
+		_show_toast("Daily reward ready — open Progress")
+
 func _setup_prestige_panel():
 	var currency = game_data.calculate_prestige_currency()
 	var text := "Prestige Level " + str(game_data.prestige_level) + "\n"
@@ -1011,13 +1152,38 @@ func _update_prestige_button():
 func _check_offline_progress():
 	if game_data.last_save_time > 0:
 		var result = game_data.calculate_offline_progress()
-		if result.gold_earned > 0 or result.crops_harvested > 0:
+		if int(result.get("crops_harvested", 0)) > 0 or float(result.get("gold_earned", 0.0)) > 0.0:
 			_show_offline_popup(result)
+			_update_gold_display()
+			call_deferred("_refresh_inventory_panel")
+			_save_game()
 
 func _show_offline_popup(result):
-	var minutes := int(result.offline_seconds / 60)
-	offline_popup.dialog_text = "You were away for " + str(minutes) + " minutes.\nRobots harvested " + str(result.crops_harvested) + " crops.\nYou earned " + _format_gold(result.gold_earned) + " gold."
+	var seconds := int(result.get("offline_seconds", 0))
+	var time_text := _format_offline_duration(seconds)
+	if bool(result.get("capped", false)):
+		time_text += " (max offline)"
+	var lines: PackedStringArray = ["Welcome back!", "You were away for " + time_text + "."]
+	var crops_harvested := int(result.get("crops_harvested", 0))
+	var crops_kept := int(result.get("crops_kept", 0))
+	var gold_earned := float(result.get("gold_earned", 0.0))
+	if crops_harvested > 0:
+		lines.append("Robots harvested " + str(crops_harvested) + " crops.")
+	if gold_earned > 0.0:
+		lines.append("Seller bots banked " + _format_gold(gold_earned) + " gold.")
+	elif crops_kept > 0:
+		lines.append("Stored " + str(crops_kept) + " crops in your market inventory.")
+	offline_popup.dialog_text = "\n".join(lines)
 	offline_popup.popup_centered()
+
+func _format_offline_duration(seconds: int) -> String:
+	if seconds >= 3600:
+		var hours := int(seconds / 3600)
+		var minutes := int((seconds % 3600) / 60)
+		if minutes > 0:
+			return str(hours) + "h " + str(minutes) + "m"
+		return str(hours) + " hours"
+	return str(maxi(1, int(seconds / 60))) + " minutes"
 
 func _show_toast(message: String):
 	toast.text = message
@@ -1145,6 +1311,8 @@ func _update_ui():
 		_refresh_inventory_panel()
 	_setup_prestige_panel()
 	_update_prestige_button()
+	if current_tab == "progress":
+		_refresh_daily_panel()
 
 func _on_crops_changed():
 	_refresh_crop_chips()
@@ -1254,6 +1422,8 @@ func _check_achievements():
 				requirement_met = robot_count >= achievement.requirement_value
 			"prestige_level":
 				requirement_met = game_data.prestige_level >= achievement.requirement_value
+			"crops_unlocked":
+				requirement_met = game_data.unlocked_crops.size() >= achievement.requirement_value
 		if requirement_met:
 			achievement.unlocked = true
 			_setup_achievements_panel()
@@ -1291,7 +1461,12 @@ func _build_save_dict() -> Dictionary:
 		"water": game_data.water,
 		"robot_energy": game_data.robot_energy,
 		"farmer_xp": game_data.farmer_xp,
-		"economy_version": 3,
+		"login_streak": game_data.login_streak,
+		"last_login_day": game_data.last_login_day,
+		"daily_reward_claimed": game_data.daily_reward_claimed,
+		"daily_goal_day": game_data.daily_goal_day,
+		"daily_goals": game_data.daily_goals,
+		"economy_version": 4,
 		"achievements": achievements_save
 	}
 
@@ -1340,6 +1515,11 @@ func _apply_save_dict(save_data: Dictionary) -> void:
 	game_data.water = float(save_data.get("water", GameData.WATER_MAX))
 	game_data.robot_energy = float(save_data.get("robot_energy", GameData.ROBOT_ENERGY_MAX))
 	game_data.farmer_xp = int(save_data.get("farmer_xp", 0))
+	game_data.login_streak = int(save_data.get("login_streak", 0))
+	game_data.last_login_day = int(save_data.get("last_login_day", 0))
+	game_data.daily_reward_claimed = bool(save_data.get("daily_reward_claimed", false))
+	game_data.daily_goal_day = int(save_data.get("daily_goal_day", 0))
+	game_data.daily_goals = save_data.get("daily_goals", {})
 	if int(save_data.get("economy_version", 0)) < 1:
 		game_data.unlocked_crops = ["wheat"]
 		game_data.selected_crop = "wheat"
@@ -1349,6 +1529,7 @@ func _apply_save_dict(save_data: Dictionary) -> void:
 	if int(save_data.get("economy_version", 0)) < 3:
 		game_data.water = GameData.WATER_MAX
 		game_data.robot_energy = GameData.ROBOT_ENERGY_MAX
+	game_data.ensure_daily_state()
 	var achievements_save = save_data.get("achievements", {})
 	for achievement_id in achievements_save:
 		if achievements.has(achievement_id):
@@ -1387,6 +1568,7 @@ func _refresh_after_cloud_restore() -> void:
 	_refresh_inventory_panel()
 	_setup_prestige_panel()
 	_setup_achievements_panel()
+	_setup_daily_panel()
 	_update_gold_display()
 
 func _merge_dictionary(base: Dictionary, incoming: Dictionary) -> Dictionary:

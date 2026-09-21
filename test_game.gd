@@ -135,6 +135,69 @@ func _init():
 	assert(plots.plant_crop(Vector2i(4, 0), "wheat"), "Should plant on a newly bought plot")
 	
 	print("✓ Plot unlocks passed")
+
+	# Offline progress: capped, plot-limited, and gold actually applied when seller owned
+	var offline := GameData.new()
+	offline.last_save_time = int(Time.get_unix_time_from_system()) - (10 * 24 * 60 * 60)
+	offline.robots["harvester"].owned = true
+	offline.robots["harvester"].level = 5
+	offline.robots["seller"].owned = true
+	offline.robots["seller"].level = 1
+	var before_gold := offline.gold
+	var result := offline.calculate_offline_progress()
+	assert(int(result.offline_seconds) <= GameData.OFFLINE_MAX_SECONDS, "Offline time should be capped")
+	assert(bool(result.capped), "Long absences should report capped")
+	assert(int(result.crops_harvested) > 0, "Harvester should produce offline crops")
+	assert(float(result.gold_earned) > 0.0, "Seller should convert offline harvest to gold")
+	assert(offline.gold > before_gold, "Offline gold should be added to wallet")
+	assert(int(offline.crop_inventory.get("wheat", 0)) == 0, "Seller should not leave wheat inventory")
+
+	var offline_store := GameData.new()
+	offline_store.last_save_time = int(Time.get_unix_time_from_system()) - 3600
+	offline_store.robots["harvester"].owned = true
+	offline_store.robots["harvester"].level = 1
+	var store_result := offline_store.calculate_offline_progress()
+	assert(int(store_result.crops_kept) == int(store_result.crops_harvested), "Without seller, crops stay in inventory")
+	assert(float(store_result.gold_earned) == 0.0, "Without seller, offline should not invent gold")
+	assert(int(offline_store.crop_inventory.get("wheat", 0)) == int(store_result.crops_kept), "Stored crops should match harvest")
+
+	print("✓ Offline progress passed")
+
+	# Daily rewards + goals
+	var daily := GameData.new()
+	daily.last_login_day = 0
+	daily.daily_reward_claimed = false
+	assert(daily.can_claim_daily_reward(), "Fresh save should allow daily claim")
+	var claim := daily.claim_daily_reward()
+	assert(bool(claim.ok), "Daily claim should succeed")
+	assert(int(claim.gold) == 150, "Day 1 reward should be 150g")
+	assert(daily.daily_streak_reward(7) == 3500, "Day 7 streak reward should be 3500g")
+	assert(not daily.can_claim_daily_reward(), "Cannot claim twice in one day")
+	daily._bump_daily_goal("harvest", 75)
+	assert(daily.can_claim_daily_goal("harvest"), "Harvest goal should complete")
+	var goal_claim := daily.claim_daily_goal("harvest")
+	assert(bool(goal_claim.ok), "Goal claim should succeed")
+	assert(int(goal_claim.gold) == 400, "Harvest goal reward should be 400g")
+	assert(daily.crops.has("blueberry"), "Blueberry crop should exist")
+	assert(daily.crops.has("peach"), "Peach crop should exist")
+	assert(daily.crops.has("cherry"), "Cherry crop should exist")
+	assert(daily.crops.has("cocoa"), "Cocoa crop should exist")
+	assert(daily.crops.has("avocado"), "Avocado crop should exist")
+	assert(daily.crops.has("truffle"), "Truffle crop should exist")
+	assert(daily.crops.has("saffron"), "Saffron crop should exist")
+	assert(GameData.CROP_ORDER.size() == 22, "Crop ladder should reach saffron")
+	assert(daily.products.has("bread"), "Bread product should exist")
+	assert(daily.products.has("blueberry_muffin"), "Blueberry muffin should exist")
+	assert(daily.products.has("peach_preserve"), "Peach preserve should exist")
+	assert(daily.products.has("cherry_syrup"), "Cherry syrup should exist")
+	assert(daily.products.has("chocolate"), "Chocolate should exist")
+	assert(daily.products.has("guacamole"), "Guacamole should exist")
+	assert(daily.products.has("truffle_oil"), "Truffle oil should exist")
+	assert(daily.products.has("saffron_tea"), "Saffron tea should exist")
+	assert(int(daily.crops.peach.unlock_cost) < int(daily.crops.cherry.unlock_cost), "Late crops should escalate unlock cost")
+	assert(int(daily.crops.saffron.sell_price) > int(daily.crops.peach.sell_price), "Saffron should out-earn peach")
+
+	print("✓ Daily retention and new content passed")
 	
 	print("=== All tests passed! ===")
 	print("The game should run without errors.")

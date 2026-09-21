@@ -1,17 +1,17 @@
 extends RefCounted
 class_name FarmTheme
 
-const INK := Color(0.23, 0.16, 0.10)
+const INK := Color(0.18, 0.11, 0.06)
 const CREAM := Color(0.99, 0.95, 0.88)
-const CREAM_MUTED := Color(0.82, 0.74, 0.62)
-const WOOD := Color(0.46, 0.28, 0.15)
-const WOOD_DARK := Color(0.32, 0.18, 0.09)
-const LEAF := Color(0.27, 0.52, 0.30)
-const LEAF_DARK := Color(0.18, 0.38, 0.22)
-const GOLD := Color(0.93, 0.72, 0.22)
-const GOLD_DEEP := Color(0.72, 0.48, 0.10)
-const PANEL := Color(0.98, 0.93, 0.82, 0.96)
-const MUTED := Color(0.62, 0.54, 0.44)
+const CREAM_MUTED := Color(0.86, 0.78, 0.66)
+const WOOD := Color(0.42, 0.26, 0.14)
+const WOOD_DARK := Color(0.22, 0.13, 0.07)
+const LEAF := Color(0.30, 0.62, 0.34)
+const LEAF_DARK := Color(0.18, 0.42, 0.24)
+const GOLD := Color(0.96, 0.78, 0.28)
+const GOLD_DEEP := Color(0.72, 0.48, 0.12)
+const PANEL := Color(0.28, 0.17, 0.09, 0.96)
+const MUTED := Color(0.72, 0.62, 0.50)
 
 static var _art := PixelArtGenerator.new()
 static var _wood_tex: ImageTexture
@@ -43,9 +43,9 @@ static func create() -> Theme:
 	theme.set_stylebox("normal", "Button", wood_panel(8))
 	theme.set_stylebox("hover", "Button", wood_panel(8, true))
 	theme.set_stylebox("pressed", "Button", wood_panel(6))
-	theme.set_stylebox("disabled", "Button", _panel(Color(0.28, 0.22, 0.18), Color(0.18, 0.12, 0.08), 4, 2, 8))
+	theme.set_stylebox("disabled", "Button", _panel(Color(0.22, 0.15, 0.10), Color(0.12, 0.08, 0.05), 6, 2, 8))
 	theme.set_stylebox("focus", "Button", wood_panel(8, true))
-	theme.set_stylebox("background", "ProgressBar", _panel(Color(0.14, 0.10, 0.08), Color(0, 0, 0, 0), 4, 0, 2))
+	theme.set_stylebox("background", "ProgressBar", _panel(Color(0.12, 0.08, 0.05), Color(0, 0, 0, 0), 4, 0, 2))
 	theme.set_stylebox("fill", "ProgressBar", _panel(GOLD, GOLD_DEEP, 4, 0, 2))
 	theme.set_color("font_color", "ProgressBar", Color(0, 0, 0, 0))
 	theme.set_stylebox("panel", "AcceptDialog", wood_panel(12))
@@ -72,12 +72,13 @@ static func wood_panel(pad: int = 10, highlight: bool = false) -> StyleBoxTextur
 	_ensure_wood_textures()
 	var box := StyleBoxTexture.new()
 	box.texture = _wood_highlight_tex if highlight else _wood_tex
-	box.texture_margin_left = 10
-	box.texture_margin_top = 10
-	box.texture_margin_right = 10
-	box.texture_margin_bottom = 10
-	box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	box.texture_margin_left = 12
+	box.texture_margin_top = 12
+	box.texture_margin_right = 12
+	box.texture_margin_bottom = 12
+	# Stretch, don't tile — tiling made every panel look like repeating planks.
+	box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 	box.set_content_margin_all(pad)
 	return box
 
@@ -90,12 +91,12 @@ static func chip_style(selected: bool, ready: bool = false) -> StyleBoxTexture:
 		box.texture = ImageTexture.create_from_image(_art.create_chip_tile(false, true))
 	else:
 		box.texture = _chip_tex
-	box.texture_margin_left = 6
-	box.texture_margin_top = 6
-	box.texture_margin_right = 6
-	box.texture_margin_bottom = 6
-	box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
-	box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	box.texture_margin_left = 8
+	box.texture_margin_top = 8
+	box.texture_margin_right = 8
+	box.texture_margin_bottom = 8
+	box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 	box.set_content_margin_all(6)
 	return box
 
@@ -103,20 +104,26 @@ static func locked_chip_style(ready: bool) -> StyleBoxTexture:
 	return chip_style(false, ready)
 
 static func row_style() -> StyleBoxFlat:
-	return _panel(Color(0.24, 0.16, 0.10, 0.92), Color(0.48, 0.32, 0.16), 6, 2, 8)
+	return _panel(Color(0.20, 0.12, 0.07, 0.94), Color(0.62, 0.42, 0.18), 8, 2, 8)
 
 static func top_bar_style() -> StyleBoxTexture:
 	return wood_panel(10)
 
-static func gold_chip_style() -> StyleBoxTexture:
-	var box := wood_panel(8, true)
+static func gold_chip_style() -> StyleBoxFlat:
+	# Compact inset chip — not a nested wood panel.
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0.16, 0.09, 0.04, 0.96)
+	box.border_color = Color(0.94, 0.74, 0.24)
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(8)
+	box.content_margin_left = 10
+	box.content_margin_right = 12
+	box.content_margin_top = 8
+	box.content_margin_bottom = 8
 	return box
 
 static func tab_style(active: bool) -> StyleBoxTexture:
-	if active:
-		var box := wood_panel(6, true)
-		return box
-	return wood_panel(6)
+	return wood_panel(6, active)
 
 static func resource_panel_style() -> StyleBoxTexture:
 	return wood_panel(8)
@@ -125,19 +132,19 @@ static func transparent_panel() -> StyleBoxEmpty:
 	return StyleBoxEmpty.new()
 
 static func water_bar_bg() -> StyleBoxFlat:
-	return _panel(Color(0.10, 0.14, 0.20), Color(0, 0, 0, 0), 4, 0, 2)
+	return _panel(Color(0.08, 0.12, 0.18), Color(0, 0, 0, 0), 4, 0, 2)
 
 static func water_bar_fill() -> StyleBoxFlat:
-	return _panel(Color(0.28, 0.62, 0.96), Color(0.12, 0.38, 0.72), 4, 0, 2)
+	return _panel(Color(0.28, 0.68, 0.98), Color(0.12, 0.40, 0.78), 4, 0, 2)
 
 static func energy_bar_bg() -> StyleBoxFlat:
-	return _panel(Color(0.16, 0.14, 0.10), Color(0, 0, 0, 0), 4, 0, 2)
+	return _panel(Color(0.14, 0.11, 0.07), Color(0, 0, 0, 0), 4, 0, 2)
 
 static func energy_bar_fill() -> StyleBoxFlat:
-	return _panel(Color(0.96, 0.78, 0.22), GOLD_DEEP, 4, 0, 2)
+	return _panel(Color(0.98, 0.82, 0.28), GOLD_DEEP, 4, 0, 2)
 
 static func level_bar_bg() -> StyleBoxFlat:
-	return _panel(Color(0.18, 0.12, 0.08), Color(0, 0, 0, 0), 3, 0, 2)
+	return _panel(Color(0.14, 0.09, 0.05), Color(0, 0, 0, 0), 3, 0, 2)
 
 static func level_bar_fill() -> StyleBoxFlat:
 	return _panel(GOLD, GOLD_DEEP, 3, 0, 2)

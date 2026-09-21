@@ -6,6 +6,9 @@ const OUTLINE := Color(0.14, 0.08, 0.05, 0.95)
 func create_crop_sprite(crop_type: String, color: Color, growth_stage: int = -1, max_stages: int = 3) -> Image:
 	if growth_stage >= 0 and max_stages > 0 and growth_stage < max_stages:
 		return _create_crop_stage_sprite(crop_type, color, growth_stage, max_stages)
+	var sheet := SpriteBank.get_image(SpriteBank.crop_sprite_id(crop_type))
+	if sheet != null:
+		return _copy_image(sheet)
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	match crop_type:
@@ -35,6 +38,20 @@ func create_crop_sprite(crop_type: String, color: Color, growth_stage: int = -1,
 			_draw_grape(image)
 		"apple":
 			_draw_apple(image)
+		"blueberry":
+			_draw_blueberry(image)
+		"peach":
+			_draw_peach(image)
+		"cherry":
+			_draw_cherry(image)
+		"cocoa":
+			_draw_cocoa(image)
+		"avocado":
+			_draw_avocado(image)
+		"truffle":
+			_draw_truffle(image)
+		"saffron":
+			_draw_saffron(image)
 		"watermelon":
 			_draw_watermelon(image)
 		"coffee":
@@ -45,6 +62,9 @@ func create_crop_sprite(crop_type: String, color: Color, growth_stage: int = -1,
 	return image
 
 func create_product_sprite(product_id: String, fallback_color: Color = Color.WHITE) -> Image:
+	var sheet := SpriteBank.get_image(SpriteBank.product_sprite_id(product_id))
+	if sheet != null:
+		return _copy_image(sheet)
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	match product_id:
@@ -78,6 +98,22 @@ func create_product_sprite(product_id: String, fallback_color: Color = Color.WHI
 			_draw_melon_juice(image)
 		"coffee_cup":
 			_draw_coffee_cup(image)
+		"bread":
+			_draw_bread(image)
+		"blueberry_muffin":
+			_draw_blueberry_muffin(image)
+		"peach_preserve":
+			_draw_peach_preserve(image)
+		"cherry_syrup":
+			_draw_cherry_syrup(image)
+		"chocolate":
+			_draw_chocolate(image)
+		"guacamole":
+			_draw_guacamole(image)
+		"truffle_oil":
+			_draw_truffle_oil(image)
+		"saffron_tea":
+			_draw_saffron_tea(image)
 		_:
 			_disc(image, 16, 16, 7, fallback_color)
 	_add_outline(image, OUTLINE)
@@ -85,32 +121,29 @@ func create_product_sprite(product_id: String, fallback_color: Color = Color.WHI
 
 func create_plot_sprite(watered: bool = false) -> Image:
 	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	var soil_a := Color(0.58, 0.36, 0.18) if not watered else Color(0.40, 0.26, 0.14)
+	var soil_b := Color(0.48, 0.30, 0.14) if not watered else Color(0.32, 0.22, 0.12)
+	var rim := Color(0.22, 0.12, 0.06)
+	var rim_hi := Color(0.68, 0.46, 0.22)
+	var rim_mid := Color(0.42, 0.26, 0.12)
 	for y in 48:
 		for x in 48:
-			var n := sin(x * 0.35) * 0.04 + cos(y * 0.28) * 0.03
 			var edge := mini(mini(x, y), mini(47 - x, 47 - y))
-			if edge < 4:
-				image.set_pixel(x, y, Color(0.28 + n, 0.16 + n * 0.5, 0.08 + n * 0.3))
-			elif edge < 6:
-				image.set_pixel(x, y, Color(0.38 + n, 0.24 + n, 0.12 + n * 0.4))
+			if edge < 2:
+				image.set_pixel(x, y, rim)
+			elif edge < 4:
+				image.set_pixel(x, y, rim_hi if (x < 8 or y < 8) else rim_mid)
 			else:
-				var furrow := -0.08 if y % 6 < 2 else 0.0
-				var soil := Color(0.52 + n + furrow, 0.34 + n * 0.5, 0.18 + n * 0.3)
-				if watered and (x + y * 2) % 7 == 0:
-					soil = soil.lerp(Color(0.42, 0.58, 0.78), 0.35)
-				image.set_pixel(x, y, soil)
-	for i in 5:
-		_px(image, 2 + i, 2, Color(0.42, 0.26, 0.12))
-		_px(image, 2, 2 + i, Color(0.42, 0.26, 0.12))
-		_px(image, 41 + i, 2, Color(0.42, 0.26, 0.12))
-		_px(image, 45, 2 + i, Color(0.42, 0.26, 0.12))
-		_px(image, 2 + i, 41, Color(0.32, 0.18, 0.08))
-		_px(image, 2, 41 + i, Color(0.32, 0.18, 0.08))
-		_px(image, 41 + i, 45, Color(0.32, 0.18, 0.08))
-		_px(image, 45, 41 + i, Color(0.32, 0.18, 0.08))
+				var furrow := (y % 5) < 2
+				var n := sin(x * 0.45 + y * 0.2) * 0.035
+				var c := soil_b if furrow else soil_a
+				c = Color(clampf(c.r + n, 0, 1), clampf(c.g + n * 0.5, 0, 1), clampf(c.b + n * 0.3, 0, 1))
+				if watered and ((x + y * 3) % 11 == 0):
+					c = c.lerp(Color(0.42, 0.68, 0.95), 0.5)
+				image.set_pixel(x, y, c)
 	if watered:
-		for p in [Vector2i(12, 14), Vector2i(28, 22), Vector2i(18, 32), Vector2i(34, 12)]:
-			_disc(image, p.x, p.y, 2, Color(0.55, 0.78, 0.95, 0.55))
+		for p in [Vector2i(14, 16), Vector2i(30, 22), Vector2i(20, 34), Vector2i(34, 12)]:
+			_disc(image, p.x, p.y, 2, Color(0.55, 0.82, 1.0, 0.55))
 	return image
 
 func create_water_overlay() -> Image:
@@ -128,61 +161,87 @@ func create_locked_plot_sprite() -> Image:
 	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
 	for y in 48:
 		for x in 48:
-			var n := sin(x * 0.35) * 0.03 + cos(y * 0.28) * 0.02
-			var furrow := -0.06 if y % 6 < 2 else 0.0
-			image.set_pixel(x, y, Color(0.36 + n + furrow, 0.26 + n * 0.5, 0.14 + n * 0.3))
-	for y in range(0, 8):
-		for x in 48:
-			if int(x * 2 + y) % 5 == 0:
-				_px(image, x, y, Color(0.28, 0.52, 0.24))
-	for p in [Vector2i(10, 20), Vector2i(28, 16), Vector2i(20, 30), Vector2i(34, 26)]:
-		_px(image, p.x, p.y, Color(0.48, 0.38, 0.22))
-		_px(image, p.x + 1, p.y, Color(0.56, 0.46, 0.28))
+			var n := sin(x * 0.4) * 0.04 + cos(y * 0.35) * 0.03
+			var edge := mini(mini(x, y), mini(47 - x, 47 - y))
+			if edge < 3:
+				image.set_pixel(x, y, Color(0.22, 0.14, 0.08))
+			else:
+				var grass := Color(0.36 + n, 0.66 + n * 0.35, 0.30 + n * 0.15)
+				if (x + y * 2) % 7 == 0:
+					grass = grass.darkened(0.08)
+				image.set_pixel(x, y, grass)
+	_rect(image, 18, 22, 12, 12, Color(0.90, 0.72, 0.24))
+	_rect(image, 20, 24, 8, 8, Color(0.62, 0.42, 0.10))
+	for a in range(0, 360, 18):
+		var rad := deg_to_rad(float(a))
+		_px(image, 24 + int(cos(rad) * 5.0), 20 + int(sin(rad) * 4.0), Color(0.95, 0.80, 0.30))
+	_px(image, 24, 28, Color(0.18, 0.10, 0.04))
 	return image
 
 func create_wood_panel_tile(size: int = 64, highlight: bool = false) -> Image:
 	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var edge := Color(0.08, 0.04, 0.02)
-	var dark := Color(0.18, 0.10, 0.05)
-	var mid := Color(0.32, 0.18, 0.08)
-	var lite := Color(0.50, 0.30, 0.14)
-	var gold_trim := Color(0.88, 0.66, 0.18)
+	var dark := Color(0.16, 0.09, 0.04)
+	var mid := Color(0.34, 0.20, 0.10)
+	var lite := Color(0.55, 0.36, 0.16)
+	var fill := Color(0.26, 0.15, 0.08)
+	var gold := Color(0.94, 0.74, 0.24)
 	for y in size:
 		for x in size:
-			var c := mid
-			if x < 2 or y < 2 or x >= size - 2 or y >= size - 2:
+			var edge_d := mini(mini(x, y), mini(size - 1 - x, size - 1 - y))
+			var c := fill
+			if edge_d < 2:
 				c = edge
-			elif x < 4 or y < 4 or x >= size - 4 or y >= size - 4:
+			elif edge_d < 4:
 				c = dark
+			elif edge_d < 7:
+				c = lite if (x < size / 2 or y < size / 2) else mid
+			elif edge_d < 10:
+				c = mid
 			else:
-				var plank := int(y / 8) % 2 == 0
-				c = mid if plank else mid.darkened(0.06)
-				if int(x / 3) % 2 == 0:
-					c = c.lightened(0.03)
-				if x < 7:
-					c = c.lerp(lite, 0.18)
-			if highlight and (x >= size - 5 or y < 5):
-				c = c.lerp(gold_trim, 0.25)
+				c = fill.lightened(0.015) if ((x / 3 + y / 5) % 4 == 0) else fill
+			if highlight and edge_d >= 2 and edge_d < 5:
+				c = c.lerp(gold, 0.6)
 			image.set_pixel(x, y, c)
+	for p in [Vector2i(5, 5), Vector2i(size - 6, 5), Vector2i(5, size - 6), Vector2i(size - 6, size - 6)]:
+		_px(image, p.x, p.y, gold if highlight else lite)
+		_px(image, p.x + 1, p.y, gold if highlight else lite)
 	return image
 
+func _sprite_looks_usable(sheet: Image) -> bool:
+	# Reject mostly-transparent or tiny content sprites.
+	var opaque := 0
+	var w := sheet.get_width()
+	var h := sheet.get_height()
+	if w < 8 or h < 8:
+		return false
+	for y in range(0, h, 2):
+		for x in range(0, w, 2):
+			if sheet.get_pixel(x, y).a > 0.2:
+				opaque += 1
+	return opaque > (w * h) / 16
+
 func create_chip_tile(selected: bool, ready: bool = false) -> Image:
+	# Match wood panels: clean frame, no muddy AI chip tiles.
 	var image := Image.create(40, 40, false, Image.FORMAT_RGBA8)
-	var bg := Color(0.28, 0.16, 0.08)
+	var bg := Color(0.26, 0.15, 0.08)
 	var border := Color(0.14, 0.08, 0.04)
+	var lite := Color(0.55, 0.36, 0.16)
 	if selected:
-		bg = Color(0.42, 0.24, 0.08)
-		border = Color(0.92, 0.72, 0.18)
+		bg = Color(0.36, 0.22, 0.10)
+		border = Color(0.94, 0.74, 0.24)
+		lite = Color(0.98, 0.86, 0.42)
 	elif ready:
-		bg = Color(0.34, 0.22, 0.10)
-		border = Color(0.72, 0.52, 0.14)
+		bg = Color(0.32, 0.20, 0.10)
+		border = Color(0.78, 0.58, 0.18)
 	for y in 40:
 		for x in 40:
+			var edge := mini(mini(x, y), mini(39 - x, 39 - y))
 			var c := bg
-			if x < 2 or y < 2 or x >= 38 or y >= 38:
+			if edge < 2:
 				c = border
-			elif x < 4 or y < 4 or x >= 36 or y >= 36:
-				c = bg.darkened(0.08)
+			elif edge < 4:
+				c = lite if selected else bg.lightened(0.08)
 			image.set_pixel(x, y, c)
 	return image
 
@@ -190,26 +249,40 @@ func create_farm_fence_frame(inner_w: int, inner_h: int, border: int = 12) -> Im
 	var w := inner_w + border * 2
 	var h := inner_h + border * 2
 	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	var grass_a := Color(0.30, 0.58, 0.26, 0.55)
-	var grass_b := Color(0.24, 0.48, 0.22, 0.45)
+	image.fill(Color(0, 0, 0, 0))
+	var post := Color(0.52, 0.32, 0.14)
+	var post_d := Color(0.28, 0.16, 0.08)
+	var rail := Color(0.62, 0.40, 0.18)
+	var grass := Color(0.32, 0.58, 0.28, 0.35)
+	# Soft grass under fence
 	for y in h:
 		for x in w:
-			if x >= border and x < w - border and y >= border and y < h - border:
-				_px(image, x, y, grass_a if (x + y) % 7 == 0 else grass_b)
-			else:
-				var post := x % 16 < 4 or y % 16 < 4
-				var c := Color(0.58, 0.36, 0.18) if post else Color(0.42, 0.26, 0.12)
-				if x < 2 or y < 2 or x >= w - 2 or y >= h - 2:
-					c = Color(0.22, 0.12, 0.06)
-				_px(image, x, y, c)
-	for px in range(4, w - 4, 14):
-		for py in [3, h - 5]:
-			for i in 6:
-				_px(image, px + i, py, Color(0.68, 0.44, 0.20))
-				_px(image, px + i, py + 1, Color(0.46, 0.28, 0.12))
+			if x < border or x >= w - border or y < border or y >= h - border:
+				if (x + y) % 5 == 0:
+					_px(image, x, y, grass)
+	# Rails
+	for y in [border / 3, border - 3, h - border + 2, h - border / 3]:
+		for x in range(2, w - 2):
+			_px(image, x, int(y), rail)
+			_px(image, x, int(y) + 1, post_d)
+	for x in [border / 3, border - 3, w - border + 2, w - border / 3]:
+		for y in range(2, h - 2):
+			_px(image, int(x), y, rail)
+			_px(image, int(x) + 1, y, post_d)
+	# Corner posts
+	for cx in [2, w - 8]:
+		for cy in [2, h - 8]:
+			_rect(image, cx, cy, 6, 6, post)
+			_rect(image, cx + 1, cy + 1, 4, 4, post.lightened(0.1))
 	return image
 
 func create_background(width: int, height: int) -> Image:
+	var sheet := SpriteBank.get_image("background")
+	if sheet != null and _sprite_looks_usable(sheet):
+		var scaled: Image = _copy_image(sheet)
+		if scaled.get_width() != width or scaled.get_height() != height:
+			scaled.resize(width, height, Image.INTERPOLATE_NEAREST)
+		return scaled
 	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
 	var horizon := int(height * 0.32)
 	for y in height:
@@ -237,36 +310,32 @@ func create_background(width: int, height: int) -> Image:
 		var h2 := horizon - 10 - int(sin(x * 0.045 + 1.0) * 7)
 		for y in range(maxi(0, h2), horizon):
 			image.set_pixel(x, y, Color(0.34, 0.62, 0.32))
-	# Barn silhouette
-	var barn_x := int(width * 0.72)
-	var barn_base := horizon + 8
-	for by in range(barn_base, barn_base + 28):
-		for bx in range(barn_x, barn_x + 34):
-			if bx >= width or by >= height:
-				continue
-			if by < barn_base + 10 and bx > barn_x + 8 and bx < barn_x + 26:
-				continue
-			image.set_pixel(bx, by, Color(0.72, 0.18, 0.14))
-	for bx in range(barn_x + 4, barn_x + 30):
-		if bx < width and barn_base + 4 < height:
-			image.set_pixel(bx, barn_base + 4, Color(0.52, 0.12, 0.10))
-	# Windmill
-	var wx := int(width * 0.14)
-	var wy := horizon + 6
-	for ty in range(wy, wy + 32):
-		if ty >= height:
-			continue
-		for tx in range(wx, wx + 6):
-			if tx < width:
-				image.set_pixel(tx, ty, Color(0.62, 0.48, 0.30))
-	for blade in 4:
-		var angle := float(blade) * 1.5708
-		for step in 14:
-			var px := wx + 3 + int(cos(angle) * float(step))
-			var py := wy + 6 + int(sin(angle) * float(step))
-			if px >= 0 and py >= 0 and px < width and py < height:
-				image.set_pixel(px, py, Color(0.86, 0.82, 0.74))
+	_stamp_sprite(image, "barn", int(width * 0.70), horizon - 4, 56, 48)
+	_stamp_sprite(image, "windmill", int(width * 0.12), horizon - 10, 40, 56)
+	_stamp_sprite(image, "grass", int(width * 0.28), horizon + 18, 18, 18)
+	_stamp_sprite(image, "grass", int(width * 0.55), horizon + 28, 16, 16)
 	return image
+
+func _stamp_sprite(target: Image, sprite_id: String, x: int, y: int, w: int, h: int) -> void:
+	var sheet := SpriteBank.get_image(sprite_id)
+	if sheet == null:
+		return
+	var scaled: Image = _copy_image(sheet)
+	scaled.resize(w, h, Image.INTERPOLATE_NEAREST)
+	for sy in h:
+		for sx in w:
+			var c: Color = scaled.get_pixel(sx, sy)
+			if c.a < 0.15:
+				continue
+			var tx := x + sx
+			var ty := y + sy
+			if tx < 0 or ty < 0 or tx >= target.get_width() or ty >= target.get_height():
+				continue
+			var base: Color = target.get_pixel(tx, ty)
+			target.set_pixel(tx, ty, base.lerp(c, c.a))
+
+func _copy_image(source: Image) -> Image:
+	return source.duplicate() as Image
 
 func create_tab_icon(tab_id: String) -> Image:
 	var image := Image.create(24, 24, false, Image.FORMAT_RGBA8)
@@ -298,6 +367,11 @@ func create_tab_icon(tab_id: String) -> Image:
 	return image
 
 func create_water_icon() -> Image:
+	var sheet := SpriteBank.get_image("water")
+	if sheet != null:
+		var scaled: Image = _copy_image(sheet)
+		scaled.resize(16, 16, Image.INTERPOLATE_NEAREST)
+		return scaled
 	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	_disc(image, 8, 10, 5, Color(0.28, 0.62, 0.96))
@@ -308,6 +382,11 @@ func create_water_icon() -> Image:
 	return image
 
 func create_energy_icon() -> Image:
+	var sheet := SpriteBank.get_image("energy")
+	if sheet != null:
+		var scaled: Image = _copy_image(sheet)
+		scaled.resize(16, 16, Image.INTERPOLATE_NEAREST)
+		return scaled
 	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	_rect(image, 4, 5, 8, 9, Color(0.74, 0.80, 0.86))
@@ -317,6 +396,12 @@ func create_energy_icon() -> Image:
 	return image
 
 func _create_crop_stage_sprite(crop_type: String, color: Color, stage: int, max_stages: int) -> Image:
+	if stage >= max_stages - 1:
+		return create_crop_sprite(crop_type, color)
+	var stage_id := SpriteBank.growth_stage_id(crop_type, stage, max_stages)
+	var sheet := SpriteBank.get_image(stage_id)
+	if sheet != null:
+		return _copy_image(sheet)
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	var stem := Color(0.32, 0.58, 0.22)
@@ -352,19 +437,36 @@ func _create_crop_stage_sprite(crop_type: String, color: Color, stage: int, max_
 	return image
 
 func create_coin_icon() -> Image:
+	# Always draw a clean G-coin; atlas slices were often wrong.
 	var image := Image.create(24, 24, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
-	_disc(image, 12, 12, 9, Color(0.62, 0.40, 0.08))
+	_disc(image, 12, 12, 9, Color(0.38, 0.24, 0.05))
 	_disc(image, 12, 12, 8, Color(0.96, 0.76, 0.22))
 	_disc(image, 10, 10, 3, Color(1.0, 0.93, 0.58))
-	_px(image, 12, 9, Color(0.72, 0.48, 0.10))
-	_px(image, 12, 10, Color(0.72, 0.48, 0.10))
-	_px(image, 12, 14, Color(0.72, 0.48, 0.10))
-	_px(image, 12, 15, Color(0.72, 0.48, 0.10))
-	_add_outline(image, Color(0.35, 0.22, 0.05))
+	_px(image, 11, 9, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 9, Color(0.45, 0.30, 0.06))
+	_px(image, 11, 10, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 10, Color(0.45, 0.30, 0.06))
+	_px(image, 11, 11, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 11, Color(0.45, 0.30, 0.06))
+	_px(image, 11, 12, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 12, Color(0.45, 0.30, 0.06))
+	_px(image, 13, 12, Color(0.45, 0.30, 0.06))
+	_px(image, 11, 13, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 13, Color(0.45, 0.30, 0.06))
+	_px(image, 11, 14, Color(0.45, 0.30, 0.06))
+	_px(image, 12, 14, Color(0.45, 0.30, 0.06))
+	_px(image, 13, 9, Color(0.45, 0.30, 0.06))
+	_px(image, 14, 9, Color(0.45, 0.30, 0.06))
+	_px(image, 13, 15, Color(0.45, 0.30, 0.06))
+	_px(image, 14, 15, Color(0.45, 0.30, 0.06))
+	_add_outline(image, Color(0.28, 0.16, 0.04))
 	return image
 
 func create_robot_sprite() -> Image:
+	var sheet := SpriteBank.get_image("robot")
+	if sheet != null:
+		return _copy_image(sheet)
 	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	var metal := Color(0.74, 0.80, 0.86)
@@ -919,6 +1021,183 @@ func _draw_coffee_cup(image: Image):
 	_px(image, 17, 6, steam)
 	_px(image, 18, 5, steam)
 	_px(image, 18, 7, steam)
+
+func _draw_blueberry(image: Image):
+	var berry := Color(0.22, 0.28, 0.72)
+	var berry_l := Color(0.38, 0.42, 0.88)
+	var crown := Color(0.42, 0.72, 0.32)
+	var berries := [Vector2i(12, 18), Vector2i(18, 16), Vector2i(16, 22), Vector2i(21, 21)]
+	for i in berries.size():
+		var b: Vector2i = berries[i]
+		_disc(image, b.x, b.y, 3 if i < 3 else 2, berry_l if i % 2 == 0 else berry)
+		_px(image, b.x - 1, b.y - 1, berry_l.lightened(0.15))
+		_px(image, b.x, b.y - 3, crown)
+
+func _draw_peach(image: Image):
+	var flesh := Color(1.0, 0.62, 0.42)
+	var blush := Color(0.96, 0.42, 0.36)
+	var hi := Color(1.0, 0.78, 0.55)
+	var stem := Color(0.42, 0.28, 0.12)
+	var leaf := Color(0.32, 0.72, 0.28)
+	_ellipse(image, 16, 18, 9, 8, flesh)
+	_disc(image, 12, 16, 3, hi)
+	_disc(image, 20, 20, 4, blush)
+	_vline(image, 16, 8, 11, stem)
+	_px(image, 17, 9, leaf)
+	_px(image, 18, 8, leaf)
+	_px(image, 19, 9, leaf)
+	_px(image, 18, 10, leaf)
+
+func _draw_bread(image: Image):
+	var crust := Color(0.72, 0.48, 0.22)
+	var loaf := Color(0.86, 0.68, 0.38)
+	var crumb := Color(0.62, 0.40, 0.18)
+	_rect(image, 7, 14, 18, 10, loaf)
+	_rect(image, 8, 12, 16, 3, crust)
+	_px(image, 11, 16, crumb)
+	_px(image, 15, 17, crumb)
+	_px(image, 19, 16, crumb)
+	_px(image, 13, 19, crumb)
+
+func _draw_blueberry_muffin(image: Image):
+	var paper := Color(0.86, 0.78, 0.62)
+	var cake := Color(0.82, 0.62, 0.32)
+	var top := Color(0.72, 0.48, 0.22)
+	var berry := Color(0.28, 0.32, 0.78)
+	_rect(image, 10, 16, 12, 10, paper)
+	_disc(image, 16, 14, 7, cake)
+	_rect(image, 10, 14, 12, 3, top)
+	_px(image, 13, 12, berry)
+	_px(image, 17, 11, berry)
+	_px(image, 19, 14, berry)
+	_px(image, 15, 15, berry)
+
+func _draw_peach_preserve(image: Image):
+	var jam := Color(1.0, 0.55, 0.32)
+	var jam_d := Color(0.92, 0.42, 0.22)
+	var glass := Color(0.86, 0.90, 0.82)
+	var lid := Color(0.86, 0.82, 0.74)
+	_rect(image, 11, 12, 10, 14, jam)
+	_rect(image, 11, 12, 10, 3, glass)
+	_rect(image, 10, 9, 12, 3, lid)
+	_px(image, 14, 17, jam_d)
+	_px(image, 16, 19, jam_d)
+	_px(image, 18, 17, jam_d)
+
+func _draw_cherry(image: Image):
+	var red := Color(0.78, 0.08, 0.18)
+	var hi := Color(0.94, 0.28, 0.32)
+	var stem := Color(0.28, 0.52, 0.18)
+	_disc(image, 12, 20, 5, red)
+	_disc(image, 20, 18, 5, red)
+	_px(image, 10, 18, hi)
+	_px(image, 18, 16, hi)
+	_px(image, 16, 8, stem)
+	_px(image, 15, 9, stem)
+	_px(image, 14, 10, stem)
+	_px(image, 17, 9, stem)
+	_px(image, 18, 10, stem)
+	_px(image, 12, 14, stem)
+	_px(image, 20, 13, stem)
+
+func _draw_cocoa(image: Image):
+	var pod := Color(0.42, 0.22, 0.12)
+	var ridge := Color(0.28, 0.14, 0.08)
+	var leaf := Color(0.24, 0.52, 0.20)
+	_ellipse(image, 16, 18, 7, 10, pod)
+	_vline(image, 16, 10, 26, ridge)
+	_px(image, 13, 14, ridge)
+	_px(image, 19, 14, ridge)
+	_px(image, 13, 20, ridge)
+	_px(image, 19, 20, ridge)
+	_px(image, 14, 6, leaf)
+	_px(image, 15, 5, leaf)
+	_px(image, 16, 6, leaf)
+	_px(image, 17, 5, leaf)
+
+func _draw_avocado(image: Image):
+	var skin := Color(0.28, 0.52, 0.22)
+	var flesh := Color(0.72, 0.82, 0.36)
+	var pit := Color(0.42, 0.26, 0.12)
+	_ellipse(image, 16, 17, 8, 10, skin)
+	_ellipse(image, 16, 17, 5, 7, flesh)
+	_disc(image, 16, 17, 3, pit)
+
+func _draw_truffle(image: Image):
+	var body := Color(0.28, 0.22, 0.18)
+	var bump := Color(0.36, 0.28, 0.22)
+	var dirt := Color(0.48, 0.36, 0.22)
+	_disc(image, 16, 18, 8, body)
+	_disc(image, 11, 14, 3, bump)
+	_disc(image, 21, 16, 3, bump)
+	_disc(image, 14, 22, 2, bump)
+	_px(image, 10, 20, dirt)
+	_px(image, 22, 22, dirt)
+	_px(image, 16, 12, dirt)
+
+func _draw_saffron(image: Image):
+	var petal := Color(0.92, 0.42, 0.12)
+	var center := Color(0.96, 0.78, 0.18)
+	var stem := Color(0.28, 0.52, 0.22)
+	_vline(image, 16, 16, 28, stem)
+	_px(image, 15, 12, petal)
+	_px(image, 16, 10, petal)
+	_px(image, 17, 12, petal)
+	_px(image, 14, 14, petal)
+	_px(image, 18, 14, petal)
+	_px(image, 13, 16, petal)
+	_px(image, 19, 16, petal)
+	_disc(image, 16, 14, 2, center)
+
+func _draw_cherry_syrup(image: Image):
+	var syrup := Color(0.72, 0.08, 0.22)
+	var glass := Color(0.82, 0.90, 0.88)
+	var cap := Color(0.86, 0.82, 0.74)
+	_rect(image, 12, 10, 8, 16, syrup)
+	_rect(image, 12, 10, 8, 3, glass)
+	_rect(image, 11, 7, 10, 3, cap)
+	_px(image, 14, 18, Color(0.90, 0.20, 0.30))
+	_px(image, 16, 20, Color(0.90, 0.20, 0.30))
+
+func _draw_chocolate(image: Image):
+	var bar := Color(0.32, 0.16, 0.08)
+	var seam := Color(0.22, 0.10, 0.05)
+	var wrap := Color(0.86, 0.72, 0.28)
+	_rect(image, 8, 12, 16, 12, bar)
+	_hline(image, 8, 23, 18, seam)
+	_vline(image, 16, 12, 23, seam)
+	_rect(image, 8, 10, 16, 2, wrap)
+
+func _draw_guacamole(image: Image):
+	var bowl := Color(0.86, 0.82, 0.74)
+	var guac := Color(0.42, 0.68, 0.28)
+	var chunk := Color(0.28, 0.52, 0.18)
+	_ellipse(image, 16, 20, 10, 6, bowl)
+	_disc(image, 16, 16, 8, guac)
+	_px(image, 13, 14, chunk)
+	_px(image, 18, 15, chunk)
+	_px(image, 16, 18, chunk)
+
+func _draw_truffle_oil(image: Image):
+	var oil := Color(0.36, 0.30, 0.18)
+	var glass := Color(0.78, 0.82, 0.70)
+	var cap := Color(0.22, 0.20, 0.18)
+	_rect(image, 13, 8, 6, 3, cap)
+	_rect(image, 12, 11, 8, 15, oil)
+	_rect(image, 12, 11, 8, 3, glass)
+	_px(image, 15, 18, Color(0.48, 0.40, 0.24))
+
+func _draw_saffron_tea(image: Image):
+	var tea := Color(0.96, 0.62, 0.18)
+	var cup := Color(0.94, 0.94, 0.92)
+	var steam := Color(0.86, 0.86, 0.88)
+	_rect(image, 8, 14, 14, 12, cup)
+	_rect(image, 10, 16, 10, 8, tea)
+	_rect(image, 22, 17, 4, 6, cup)
+	_px(image, 12, 8, steam)
+	_px(image, 13, 7, steam)
+	_px(image, 17, 7, steam)
+	_px(image, 18, 6, steam)
 
 func _cloud(image: Image, cx: int, cy: int, r: int):
 	_disc(image, cx, cy, r, Color(1, 1, 1, 0.88))
